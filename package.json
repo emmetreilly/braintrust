@@ -1,0 +1,14 @@
+{
+  "name": "brain-trust",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=packages/web",
+    "dev:worker": "npm run dev --workspace=packages/worker",
+    "build": "npm run build --workspace=packages/web",
+    "build:worker": "npm run build --workspace=packages/worker"
+  }
+}
