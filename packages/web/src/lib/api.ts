@@ -94,6 +94,36 @@ export const brain = {
       method: 'POST',
       body: JSON.stringify({ groupId, message, context, history }),
     }),
+
+  factCheck: (groupId: string, content: string) =>
+    fetchApi<{ response: string; results?: any[] }>('/brain/fact-check', {
+      method: 'POST',
+      body: JSON.stringify({ groupId, content }),
+    }),
+
+  summarize: (groupId: string, type: 'daily' | 'weekly' | 'topic' | 'catchup', topic?: string) =>
+    fetchApi<{ response: string }>('/brain/summarize', {
+      method: 'POST',
+      body: JSON.stringify({ groupId, type, topic }),
+    }),
+
+  analyzeMedia: (groupId: string, url: string) =>
+    fetchApi<{ response: string }>('/brain/analyze-media', {
+      method: 'POST',
+      body: JSON.stringify({ groupId, url }),
+    }),
+
+  recommend: (groupId: string, limit?: number) =>
+    fetchApi<{ response: string; recommendations?: any[] }>('/brain/recommend', {
+      method: 'POST',
+      body: JSON.stringify({ groupId, limit }),
+    }),
+
+  searchMemory: (groupId: string, query: string, limit?: number) =>
+    fetchApi<{ response: string; results?: any[] }>('/brain/search-memory', {
+      method: 'POST',
+      body: JSON.stringify({ groupId, query, limit }),
+    }),
 }
 
 // Media

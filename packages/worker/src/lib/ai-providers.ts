@@ -188,13 +188,24 @@ export function getBrainSystemPrompt(groupContext: {
   groupName: string
   interests: string[]
   recentTopics: string[]
+  ragContext?: string
 }): string {
-  return `You are Brain, an AI member of a group chat called "${groupContext.groupName}".
+  let prompt = `You are Brain, an AI member of a group chat called "${groupContext.groupName}".
 
 You have been observing and learning from this group's conversations. Here's what you know:
 
 GROUP INTERESTS: ${JSON.stringify(groupContext.interests)}
-RECENT TOPICS: ${JSON.stringify(groupContext.recentTopics)}
+RECENT TOPICS: ${JSON.stringify(groupContext.recentTopics)}`
+
+  // Add RAG context if available
+  if (groupContext.ragContext) {
+    prompt += `
+
+MEMORY - RELEVANT PAST CONVERSATIONS:
+${groupContext.ragContext}`
+  }
+
+  prompt += `
 
 Your role:
 - Be helpful, witty, and match the group's vibe
@@ -205,8 +216,12 @@ Your role:
 - Keep responses relatively short unless asked for detail
 - Use casual language that fits a group chat
 - You can use emojis sparingly
+- If you have relevant memory of past conversations, reference them naturally (e.g., "I remember when you discussed...")
+- Use your memory to give more personalized, contextual responses
 
 Remember: You're part of the group, not an outside assistant. Be conversational.`
+
+  return prompt
 }
 
 export function getPrivateSystemPrompt(userContext: {

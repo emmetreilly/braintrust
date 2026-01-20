@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useAuthStore } from '../stores/auth'
-import { groups as groupsApi, messages as messagesApi } from '../lib/api'
+import { groups as groupsApi, messages as messagesApi, brain as brainApi } from '../lib/api'
 import MessageBubble from '../components/Chat/MessageBubble'
 import BrainResponse from '../components/Chat/BrainResponse'
 import MediaCard from '../components/Chat/MediaCard'
@@ -23,6 +23,9 @@ export default function Chat() {
   const [privateThread, setPrivateThread] = useState<{ context: string | null } | null>(null)
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(true)
+  const [brainLoading, setBrainLoading] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showMemorySearch, setShowMemorySearch] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -110,18 +113,79 @@ export default function Chat() {
     }
   }
 
-  const handleQuickAction = (action: string) => {
-    const prompts: Record<string, string | null> = {
-      catchup: '@brain catch me up on what I missed',
-      factcheck: '@brain fact check the last claim',
-      similar: '@brain find similar content',
-      private: null,
+  // Helper to add Brain response to messages
+  const addBrainMessage = (content: string) => {
+    if (!groupId) return
+    const brainMessage: Message = {
+      id: crypto.randomUUID(),
+      group_id: groupId,
+      user_id: `brain-${groupId}`,
+      type: 'brain_response',
+      content,
+      created_at: new Date().toISOString(),
     }
+    setMessages((prev) => [...prev, brainMessage])
+  }
+
+  const handleQuickAction = async (action: string) => {
+    if (!groupId) return
 
     if (action === 'private') {
       setPrivateThread({ context: null })
-    } else if (prompts[action]) {
-      setInput(prompts[action]!)
+      return
+    }
+
+    if (action === 'memory') {
+      setShowMemorySearch(true)
+      return
+    }
+
+    setBrainLoading(true)
+    try {
+      let response: { response: string }
+
+      switch (action) {
+        case 'catchup':
+          response = await brainApi.summarize(groupId, 'catchup')
+          break
+        case 'weekly':
+          response = await brainApi.summarize(groupId, 'weekly')
+          break
+        case 'factcheck':
+          // Get last few messages for fact checking
+          const recentContent = messages.slice(-5).map(m => m.content).join('\n')
+          response = await brainApi.factCheck(groupId, recentContent)
+          break
+        case 'recommend':
+          response = await brainApi.recommend(groupId, 3)
+          break
+        default:
+          return
+      }
+
+      addBrainMessage(response.response)
+    } catch (err) {
+      console.error('Brain action failed:', err)
+      addBrainMessage('Sorry, I encountered an error. Please try again.')
+    } finally {
+      setBrainLoading(false)
+    }
+  }
+
+  const handleMemorySearch = async () => {
+    if (!groupId || !searchQuery.trim()) return
+
+    setBrainLoading(true)
+    setShowMemorySearch(false)
+    try {
+      const response = await brainApi.searchMemory(groupId, searchQuery)
+      addBrainMessage(response.response)
+    } catch (err) {
+      console.error('Memory search failed:', err)
+      addBrainMessage('Sorry, I couldn\'t search my memory. Please try again.')
+    } finally {
+      setBrainLoading(false)
+      setSearchQuery('')
     }
   }
 
@@ -244,6 +308,50 @@ export default function Chat() {
         })}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Brain Loading Indicator */}
+      {brainLoading && (
+        <div className="px-4 py-2 flex items-center gap-2 text-sm text-cyan-400">
+          <div className="animate-pulse">🧠</div>
+          <span>Brain is thinking...</span>
+        </div>
+      )}
+
+      {/* Memory Search Modal */}
+      {showMemorySearch && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 rounded-xl p-4 w-full max-w-md">
+            <h3 className="font-medium mb-3">Search Brain's Memory</h3>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="What are you looking for?"
+              className="w-full bg-zinc-800 rounded-lg px-4 py-3 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              autoFocus
+              onKeyDown={(e) => e.key === 'Enter' && handleMemorySearch()}
+            />
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setShowMemorySearch(false)
+                  setSearchQuery('')
+                }}
+                className="flex-1 bg-zinc-800 rounded-lg py-2 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMemorySearch}
+                disabled={!searchQuery.trim()}
+                className="flex-1 bg-cyan-600 rounded-lg py-2 text-sm font-medium disabled:opacity-50"
+              >
+                Search
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quick Actions */}
       <QuickActions onAction={handleQuickAction} />

@@ -1,6 +1,12 @@
 import { Hono } from 'hono'
 import { verifyToken, decryptApiKey } from '../lib/auth'
 import { callAI, getBrainSystemPrompt, getPrivateSystemPrompt } from '../lib/ai-providers'
+import { buildRAGContext, searchSimilarMessages } from '../lib/vectorstore'
+import { factCheckMessage, formatFactCheckResult } from '../lib/fact-checker'
+import { generateDailySummary, generateWeeklySummary, generateTopicSummary, catchUp, formatSummary } from '../lib/summarizer'
+import { parseArticle, summarizeArticle, extractUrls, getContentType } from '../lib/article-parser'
+import { extractVideoId, processYouTubeVideo } from '../lib/youtube'
+import { generateRecommendations, formatRecommendation } from '../lib/news-sources'
 import type { Env, User, AIProvider } from '../types'
 
 const brain = new Hono<{ Bindings: Env }>()
@@ -105,11 +111,25 @@ brain.post('/respond', async (c) => {
     // Get recent messages for context
     const recentMessages = await getRecentMessages(c.env.DB, groupId)
 
-    // Build system prompt
+    // Build RAG context from similar past conversations
+    let ragContext = ''
+    try {
+      ragContext = await buildRAGContext(c.env, content, groupId, {
+        limit: 5,
+        provider: 'cloudflare',
+        userId: user.id,
+      })
+    } catch (error) {
+      console.error('Failed to build RAG context:', error)
+      // Continue without RAG context
+    }
+
+    // Build system prompt with RAG context
     const systemPrompt = getBrainSystemPrompt({
       groupName: group.name as string,
       interests: [],
       recentTopics: recentMessages.slice(-5),
+      ragContext, // Add RAG context to system prompt
     })
 
     // Call AI
@@ -198,6 +218,243 @@ brain.post('/private', async (c) => {
   } catch (error) {
     console.error('Private thread error:', error)
     return c.json({ message: 'Brain encountered an error' }, 500)
+  }
+})
+
+// Fact check a claim or message
+brain.post('/fact-check', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  try {
+    const { groupId, content } = await c.req.json<{
+      groupId: string
+      content: string
+    }>()
+
+    const provider = await getGroupProvider(c.env.DB, groupId)
+    const apiKey = await getUserApiKey(c.env.DB, user.id, provider, c.env.JWT_SECRET)
+
+    const results = await factCheckMessage(c.env, content, {
+      apiKey: apiKey || undefined,
+      provider,
+      maxClaims: 3,
+    })
+
+    if (results.length === 0) {
+      return c.json({
+        response: "I couldn't identify any specific factual claims to verify in that message.",
+      })
+    }
+
+    const formattedResults = results.map(formatFactCheckResult).join('\n---\n')
+
+    return c.json({ response: formattedResults, results })
+  } catch (error) {
+    console.error('Fact check error:', error)
+    return c.json({ message: 'Fact checking failed' }, 500)
+  }
+})
+
+// Summarize conversation
+brain.post('/summarize', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  try {
+    const { groupId, type, topic } = await c.req.json<{
+      groupId: string
+      type: 'daily' | 'weekly' | 'topic' | 'catchup'
+      topic?: string
+    }>()
+
+    const provider = await getGroupProvider(c.env.DB, groupId)
+    const apiKey = await getUserApiKey(c.env.DB, user.id, provider, c.env.JWT_SECRET)
+
+    let response: string
+
+    if (type === 'catchup') {
+      response = await catchUp(c.env, groupId, user.id, {
+        apiKey: apiKey || undefined,
+        provider,
+      })
+    } else if (type === 'topic' && topic) {
+      const topicSummary = await generateTopicSummary(c.env, groupId, topic, {
+        apiKey: apiKey || undefined,
+        provider,
+      })
+      response = `**Topic: ${topicSummary.topic}**\n\n${topicSummary.summary}\n\n`
+      if (topicSummary.keyPoints.length > 0) {
+        response += `**Key Points:**\n${topicSummary.keyPoints.map(p => `- ${p}`).join('\n')}\n\n`
+      }
+      if (topicSummary.participants.length > 0) {
+        response += `**Discussed by:** ${topicSummary.participants.join(', ')}`
+      }
+    } else if (type === 'weekly') {
+      const summary = await generateWeeklySummary(c.env, groupId, new Date(), {
+        apiKey: apiKey || undefined,
+        provider,
+      })
+      response = formatSummary(summary)
+    } else {
+      const summary = await generateDailySummary(c.env, groupId, new Date(), {
+        apiKey: apiKey || undefined,
+        provider,
+      })
+      response = formatSummary(summary)
+    }
+
+    return c.json({ response })
+  } catch (error) {
+    console.error('Summarize error:', error)
+    return c.json({ message: 'Summarization failed' }, 500)
+  }
+})
+
+// Analyze shared media (articles, videos)
+brain.post('/analyze-media', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  try {
+    const { groupId, url } = await c.req.json<{
+      groupId: string
+      url: string
+    }>()
+
+    const provider = await getGroupProvider(c.env.DB, groupId)
+    const apiKey = await getUserApiKey(c.env.DB, user.id, provider, c.env.JWT_SECRET)
+
+    const contentType = getContentType(url)
+    let response: string
+
+    if (contentType === 'video') {
+      // YouTube video
+      const videoId = extractVideoId(url)
+      if (!videoId) {
+        return c.json({ response: "I couldn't recognize that video URL." })
+      }
+
+      const result = await processYouTubeVideo(c.env, url, {
+        apiKey: apiKey || undefined,
+        provider,
+      })
+
+      response = `**${result.videoInfo.title}**\n_${result.videoInfo.channelName}_\n\n`
+
+      if (result.summary) {
+        response += `**Summary:**\n${result.summary.summary}\n\n`
+        if (result.summary.keyPoints.length > 0) {
+          response += `**Key Points:**\n${result.summary.keyPoints.map(p => `- ${p}`).join('\n')}\n\n`
+        }
+        if (result.summary.timestamps && result.summary.timestamps.length > 0) {
+          response += `**Timestamps:**\n${result.summary.timestamps.map(t => `- ${t.time}: ${t.description}`).join('\n')}`
+        }
+      } else if (result.error) {
+        response += `_Note: ${result.error}_`
+      }
+    } else {
+      // Article
+      const article = await parseArticle(url)
+      const summary = await summarizeArticle(c.env, article, {
+        apiKey: apiKey || undefined,
+        provider,
+      })
+
+      response = `**${article.title}**\n_${article.siteName}${article.author ? ` by ${article.author}` : ''}_\n\n`
+      response += `**Summary:**\n${summary.summary}\n\n`
+
+      if (summary.keyPoints.length > 0) {
+        response += `**Key Points:**\n${summary.keyPoints.map(p => `- ${p}`).join('\n')}\n\n`
+      }
+
+      if (summary.topics.length > 0) {
+        response += `**Topics:** ${summary.topics.join(', ')}\n\n`
+      }
+
+      response += `_${article.wordCount} words_`
+    }
+
+    return c.json({ response })
+  } catch (error) {
+    console.error('Media analysis error:', error)
+    return c.json({ message: 'Media analysis failed' }, 500)
+  }
+})
+
+// Get recommendations for the group
+brain.post('/recommend', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  try {
+    const { groupId, limit } = await c.req.json<{
+      groupId: string
+      limit?: number
+    }>()
+
+    const provider = await getGroupProvider(c.env.DB, groupId)
+    const apiKey = await getUserApiKey(c.env.DB, user.id, provider, c.env.JWT_SECRET)
+
+    const recommendations = await generateRecommendations(c.env, groupId, {
+      apiKey: apiKey || undefined,
+      provider,
+      limit: limit || 3,
+    })
+
+    if (recommendations.length === 0) {
+      return c.json({
+        response: "I don't have enough conversation history yet to make good recommendations. Keep chatting and I'll learn your interests!",
+      })
+    }
+
+    const formatted = recommendations.map(formatRecommendation).join('\n\n---\n\n')
+
+    return c.json({ response: formatted, recommendations })
+  } catch (error) {
+    console.error('Recommendation error:', error)
+    return c.json({ message: 'Recommendation failed' }, 500)
+  }
+})
+
+// Search memory (past conversations)
+brain.post('/search-memory', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  try {
+    const { groupId, query, limit } = await c.req.json<{
+      groupId: string
+      query: string
+      limit?: number
+    }>()
+
+    const results = await searchSimilarMessages(c.env, query, groupId, {
+      limit: limit || 10,
+      provider: 'cloudflare',
+      userId: user.id,
+      minScore: 0.5,
+    })
+
+    if (results.length === 0) {
+      return c.json({
+        response: "I couldn't find any relevant past conversations about that topic.",
+        results: [],
+      })
+    }
+
+    const formatted = results.map((r, i) => {
+      const date = new Date(r.metadata.createdAt).toLocaleDateString()
+      return `**[${i + 1}]** ${r.metadata.authorName || 'Someone'} (${date}):\n"${r.metadata.content}"\n_Relevance: ${Math.round(r.score * 100)}%_`
+    }).join('\n\n')
+
+    return c.json({
+      response: `Found ${results.length} relevant messages:\n\n${formatted}`,
+      results,
+    })
+  } catch (error) {
+    console.error('Search memory error:', error)
+    return c.json({ message: 'Memory search failed' }, 500)
   }
 })
 

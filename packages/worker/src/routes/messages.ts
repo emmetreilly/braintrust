@@ -1,5 +1,7 @@
 import { Hono } from 'hono'
 import { verifyToken } from '../lib/auth'
+import { storeMessageEmbedding } from '../lib/vectorstore'
+import { prepareMessageForEmbedding } from '../lib/embeddings'
 import type { Env, Message, User } from '../types'
 
 const messages = new Hono<{ Bindings: Env }>()
@@ -185,6 +187,43 @@ messages.post('/groups/:groupId/messages', async (c) => {
       media_data,
       created_at: createdAt,
     }
+
+    // Generate and store embedding for RAG (async, don't block response)
+    c.executionCtx.waitUntil(
+      (async () => {
+        try {
+          // Prepare text with author context
+          const textForEmbedding = prepareMessageForEmbedding({
+            content: content.trim(),
+            author_name: user.name,
+            type,
+          })
+
+          // Store embedding in Vectorize
+          await storeMessageEmbedding(c.env, {
+            id,
+            groupId,
+            userId: user.id,
+            authorName: user.name,
+            content: textForEmbedding,
+            createdAt,
+            type: 'message',
+          }, {
+            provider: 'cloudflare', // Use Cloudflare AI by default
+            userId: user.id,
+          })
+
+          // Track embedding in D1
+          await c.env.DB.prepare(`
+            INSERT INTO message_embeddings (id, message_id, group_id, provider, dimensions)
+            VALUES (?, ?, ?, ?, ?)
+          `).bind(crypto.randomUUID(), id, groupId, 'cloudflare', 768).run()
+        } catch (error) {
+          console.error('Failed to store message embedding:', error)
+          // Don't fail the message send if embedding fails
+        }
+      })()
+    )
 
     return c.json({ message })
   } catch (error) {

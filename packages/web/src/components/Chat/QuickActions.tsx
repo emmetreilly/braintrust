@@ -3,10 +3,12 @@ interface QuickActionsProps {
 }
 
 const actions = [
-  { id: 'catchup', label: '🧠 Catch up' },
-  { id: 'factcheck', label: '✓ Fact check' },
-  { id: 'similar', label: '🔍 Similar' },
-  { id: 'private', label: '💭 Private' },
+  { id: 'catchup', label: '🧠 Catch up', tip: 'Get summary of what you missed' },
+  { id: 'weekly', label: '📝 Weekly', tip: 'Weekly conversation summary' },
+  { id: 'factcheck', label: '✓ Fact check', tip: 'Verify claims in conversation' },
+  { id: 'recommend', label: '💡 Recommend', tip: 'Get content suggestions' },
+  { id: 'memory', label: '🔍 Memory', tip: 'Search past conversations' },
+  { id: 'private', label: '💭 Private', tip: 'Chat privately with Brain' },
 ]
 
 export default function QuickActions({ onAction }: QuickActionsProps) {
@@ -17,6 +19,7 @@ export default function QuickActions({ onAction }: QuickActionsProps) {
           key={action.id}
           onClick={() => onAction(action.id)}
           className="text-xs bg-zinc-900 px-3 py-2 rounded-full whitespace-nowrap hover:bg-zinc-800 transition-colors"
+          title={action.tip}
         >
           {action.label}
         </button>
