@@ -1,10 +1,13 @@
 import { useState } from 'react'
-import { brain } from '../../lib/api'
+import { brain, messages as messagesApi } from '../../lib/api'
 
 interface PrivateThreadProps {
   groupId: string
   context: string | null
+  documentId?: string
+  documentName?: string
   onClose: () => void
+  onShareInsight?: (insight: string) => void
 }
 
 interface ThreadMessage {
@@ -12,18 +15,21 @@ interface ThreadMessage {
   content: string
 }
 
-const quickPrompts = ['Explain more', 'Draft a reply', 'Search history', 'Find related']
+const quickPrompts = ['Summarize this', 'Key points', 'What questions should I ask?', 'Draft a message']
 
-export default function PrivateThread({ groupId, context, onClose }: PrivateThreadProps) {
+export default function PrivateThread({ groupId, context, documentId, documentName, onClose, onShareInsight }: PrivateThreadProps) {
   const [messages, setMessages] = useState<ThreadMessage[]>([
     {
       role: 'brain',
-      content:
-        "Private thread — only you can see this. I can go deeper on anything, fact-check, help draft a reply, or find related stuff.",
+      content: documentName
+        ? `I've loaded "${documentName}". What would you like to know about it? You can ask me to summarize, find key points, or answer specific questions.`
+        : "Private thread — only you can see this. I can go deeper on anything, fact-check, help draft a reply, or find related stuff.",
     },
   ])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [selectedMessage, setSelectedMessage] = useState<number | null>(null)
+  const [sharing, setSharing] = useState(false)
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return
@@ -34,11 +40,17 @@ export default function PrivateThread({ groupId, context, onClose }: PrivateThre
     setIsLoading(true)
 
     try {
+      // Build context with document info
+      const fullContext = documentName
+        ? `User is asking about document: "${documentName}". ${context || ''}`
+        : context || undefined
+
       const { response } = await brain.private(
         groupId,
         input,
-        context || undefined,
-        messages.map((m) => ({ role: m.role === 'brain' ? 'assistant' : 'user', content: m.content }))
+        fullContext,
+        messages.map((m) => ({ role: m.role === 'brain' ? 'assistant' : 'user', content: m.content })),
+        documentId // Pass documentId so backend can fetch actual content
       )
       setMessages((prev) => [...prev, { role: 'brain', content: response }])
     } catch {
@@ -48,6 +60,45 @@ export default function PrivateThread({ groupId, context, onClose }: PrivateThre
       ])
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleShareToGroup = async (messageIndex: number) => {
+    const message = messages[messageIndex]
+    if (!message || message.role !== 'brain') return
+
+    setSharing(true)
+    try {
+      // Create an insight message in the group chat
+      const insightContent = documentName
+        ? `🧠 **Brain insight about "${documentName}":**\n\n${message.content}`
+        : `🧠 **Brain insight:**\n\n${message.content}`
+
+      // Include documentId in media_data so others can continue the conversation about this document
+      const mediaData = documentId
+        ? JSON.stringify({ type: 'insight', documentId, documentName })
+        : undefined
+
+      await messagesApi.send(groupId, insightContent, 'brain_insight', mediaData)
+
+      if (onShareInsight) {
+        onShareInsight(message.content)
+      }
+
+      setSelectedMessage(null)
+      // Show success feedback
+      setMessages((prev) => [
+        ...prev,
+        { role: 'brain', content: '✓ Shared to the group chat! Everyone can see this insight now.' },
+      ])
+    } catch (err) {
+      console.error('Failed to share insight:', err)
+      setMessages((prev) => [
+        ...prev,
+        { role: 'brain', content: 'Sorry, I couldn\'t share that. Please try again.' },
+      ])
+    } finally {
+      setSharing(false)
     }
   }
 
@@ -68,17 +119,19 @@ export default function PrivateThread({ groupId, context, onClose }: PrivateThre
         <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center">
           🧠
         </div>
-        <div>
-          <div className="font-medium text-sm">Private thread</div>
+        <div className="flex-1">
+          <div className="font-medium text-sm">
+            {documentName ? `Brain · ${documentName}` : 'Private thread'}
+          </div>
           <div className="text-xs text-green-500 flex items-center gap-1">
             <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-            End-to-end encrypted · Only you
+            Private · Only you can see this
           </div>
         </div>
       </div>
 
       {/* Context */}
-      {context && (
+      {context && !documentName && (
         <div className="p-3 bg-zinc-900/50 border-b border-zinc-800">
           <div className="text-xs text-zinc-500 mb-1">Context</div>
           <div className="text-sm text-zinc-400 line-clamp-2">{context}</div>
@@ -97,14 +150,36 @@ export default function PrivateThread({ groupId, context, onClose }: PrivateThre
                 🧠
               </div>
             )}
-            <div
-              className={`max-w-xs rounded-2xl px-4 py-3 ${
-                msg.role === 'user'
-                  ? 'bg-cyan-600 rounded-br-sm'
-                  : 'bg-zinc-900 rounded-bl-sm'
-              }`}
-            >
-              <p className="text-sm whitespace-pre-line">{msg.content}</p>
+            <div className="flex flex-col gap-1">
+              <div
+                onClick={() => msg.role === 'brain' && i > 0 && setSelectedMessage(selectedMessage === i ? null : i)}
+                className={`max-w-xs rounded-2xl px-4 py-3 ${
+                  msg.role === 'user'
+                    ? 'bg-cyan-600 rounded-br-sm'
+                    : 'bg-zinc-900 rounded-bl-sm cursor-pointer hover:bg-zinc-800/80'
+                } ${selectedMessage === i ? 'ring-2 ring-cyan-500' : ''}`}
+              >
+                <p className="text-sm whitespace-pre-line">{msg.content}</p>
+              </div>
+              {/* Share button for selected Brain messages */}
+              {selectedMessage === i && msg.role === 'brain' && i > 0 && (
+                <button
+                  onClick={() => handleShareToGroup(i)}
+                  disabled={sharing}
+                  className="self-start ml-10 flex items-center gap-1.5 text-xs bg-cyan-500/20 text-cyan-400 px-3 py-1.5 rounded-full hover:bg-cyan-500/30 transition-colors disabled:opacity-50"
+                >
+                  {sharing ? (
+                    'Sharing...'
+                  ) : (
+                    <>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                      </svg>
+                      Share to group
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -130,6 +205,11 @@ export default function PrivateThread({ groupId, context, onClose }: PrivateThre
         )}
       </div>
 
+      {/* Tip */}
+      <div className="px-4 py-2 text-xs text-zinc-600 text-center">
+        Tap any Brain response to share it with the group
+      </div>
+
       {/* Quick Prompts */}
       <div className="px-4 py-2 flex gap-2 overflow-x-auto border-t border-zinc-900 hide-scrollbar">
         {quickPrompts.map((prompt) => (
@@ -151,7 +231,7 @@ export default function PrivateThread({ groupId, context, onClose }: PrivateThre
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask Brain privately..."
+            placeholder={documentName ? `Ask about ${documentName}...` : 'Ask Brain privately...'}
             className="flex-1 bg-zinc-900 rounded-full px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
           <button

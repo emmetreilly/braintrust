@@ -70,6 +70,14 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/settings/:groupId"
+          element={
+            <ProtectedRoute>
+              <Settings />
+            </ProtectedRoute>
+          }
+        />
         <Route path="/" element={<Navigate to="/groups" replace />} />
       </Routes>
     </BrowserRouter>

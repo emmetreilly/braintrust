@@ -4,6 +4,13 @@ export interface Env {
   CHAT_ROOMS: DurableObjectNamespace
   JWT_SECRET: string
   ENVIRONMENT: string
+  VECTORIZE: VectorizeIndex
+  AI: Ai
+  // Google OAuth
+  GOOGLE_CLIENT_ID: string
+  GOOGLE_CLIENT_SECRET: string
+  WORKER_URL: string
+  WEB_URL: string
 }
 
 export interface User {
@@ -12,6 +19,41 @@ export interface User {
   name: string
   avatar_url?: string
   interests: string[]
+  created_at: string
+  workspace_id?: string
+  workspace_name?: string
+}
+
+export interface Workspace {
+  id: string
+  domain: string
+  name: string
+  claude_api_key_encrypted?: string
+  created_at: string
+}
+
+export interface Document {
+  id: string
+  workspace_id: string
+  uploaded_by: string
+  filename: string
+  file_type: string
+  mime_type: string
+  file_size: number
+  r2_key: string
+  content_text?: string
+  has_embedding: boolean
+  created_at: string
+  tags?: DocumentTag[]
+  uploader?: User
+}
+
+export interface DocumentTag {
+  id: string
+  workspace_id: string
+  name: string
+  color: string
+  tag_type: 'deal' | 'client' | 'topic' | 'tag'
   created_at: string
 }
 
@@ -45,10 +87,11 @@ export interface Message {
   id: string
   group_id: string
   user_id: string
-  type: 'text' | 'brain_response' | 'media'
+  type: 'text' | 'brain_response' | 'media' | 'brain_insight'
   content: string
   media_data?: string
   ai_provider?: string
+  visible_to?: string // If set, only visible to this user until shared
   created_at: string
 }
 

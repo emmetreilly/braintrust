@@ -8,7 +8,29 @@
       "Bash(gh repo view:*)",
       "Bash(git remote set-url:*)",
       "Bash(gh auth setup-git:*)",
-      "Bash(wrangler d1 execute:*)"
+      "Bash(wrangler d1 execute:*)",
+      "Bash(npx vite build)",
+      "Bash(curl:*)",
+      "Bash(npx wrangler:*)",
+      "Bash(CLOUDFLARE_API_TOKEN=\"35mJt6ReV2HByTJDnh9jFts-_vGRaQ3qIx10HuKR\" npx wrangler whoami:*)",
+      "Bash(CLOUDFLARE_API_TOKEN=\"35mJt6ReV2HByTJDnh9jFts-_vGRaQ3qIx10HuKR\" npx wrangler:*)",
+      "Bash(CLOUDFLARE_API_TOKEN=\"35mJt6ReV2HByTJDnh9jFts-_vGRaQ3qIx10HuKR\" CLOUDFLARE_ACCOUNT_ID=\"caaf4c66f911a93355bb85a73596021f\" npx wrangler r2 bucket create:*)",
+      "Bash(CLOUDFLARE_API_TOKEN=\"35mJt6ReV2HByTJDnh9jFts-_vGRaQ3qIx10HuKR\" CLOUDFLARE_ACCOUNT_ID=\"caaf4c66f911a93355bb85a73596021f\" npx wrangler:*)",
+      "Bash(CLOUDFLARE_API_TOKEN=\"35mJt6ReV2HByTJDnh9jFts-_vGRaQ3qIx10HuKR\" CLOUDFLARE_ACCOUNT_ID=\"caaf4c66f911a93355bb85a73596021f\" npx wrangler secret put JWT_SECRET)",
+      "Bash(CLOUDFLARE_API_TOKEN=\"35mJt6ReV2HByTJDnh9jFts-_vGRaQ3qIx10HuKR\" CLOUDFLARE_ACCOUNT_ID=\"caaf4c66f911a93355bb85a73596021f\" npx wrangler deploy:*)",
+      "Bash(VITE_API_URL=\"https://brain-trust-worker.e-caa.workers.dev\" npm run build:*)",
+      "Bash(CLOUDFLARE_API_TOKEN=\"35mJt6ReV2HByTJDnh9jFts-_vGRaQ3qIx10HuKR\" CLOUDFLARE_ACCOUNT_ID=\"caaf4c66f911a93355bb85a73596021f\" npx wrangler pages deploy:*)",
+      "Bash(VITE_API_URL=\"https://brain-trust-worker.e-caa.workers.dev/api\" npm run build:*)",
+      "Bash(CLOUDFLARE_API_TOKEN=\"35mJt6ReV2HByTJDnh9jFts-_vGRaQ3qIx10HuKR\" CLOUDFLARE_ACCOUNT_ID=\"caaf4c66f911a93355bb85a73596021f\" npx wrangler pages deploy packages/web/dist --project-name=brain-trust --commit-dirty=true)",
+      "Bash(CLOUDFLARE_API_TOKEN=\"35mJt6ReV2HByTJDnh9jFts-_vGRaQ3qIx10HuKR\" CLOUDFLARE_ACCOUNT_ID=\"caaf4c66f911a93355bb85a73596021f\" npx wrangler d1 execute brain-trust-db --remote --command=\"PRAGMA table_info\\(groups\\);\")",
+      "Bash(CLOUDFLARE_API_TOKEN=\"35mJt6ReV2HByTJDnh9jFts-_vGRaQ3qIx10HuKR\" CLOUDFLARE_ACCOUNT_ID=\"caaf4c66f911a93355bb85a73596021f\" npx wrangler d1 execute brain-trust-db --command \"SELECT id, name, invite_code, created_by FROM groups;\" --remote)",
+      "Bash(CLOUDFLARE_API_TOKEN=\"35mJt6ReV2HByTJDnh9jFts-_vGRaQ3qIx10HuKR\" CLOUDFLARE_ACCOUNT_ID=\"caaf4c66f911a93355bb85a73596021f\" npx wrangler secret:*)",
+      "Bash(npm run build:*)",
+      "Bash(CLOUDFLARE_API_TOKEN=\"35mJt6ReV2HByTJDnh9jFts-_vGRaQ3qIx10HuKR\" CLOUDFLARE_ACCOUNT_ID=\"caaf4c66f911a93355bb85a73596021f\" npx wrangler d1 execute brain-trust-db --remote --file=migrations/001_workspaces.sql)",
+      "Bash(CLOUDFLARE_API_TOKEN=\"35mJt6ReV2HByTJDnh9jFts-_vGRaQ3qIx10HuKR\" CLOUDFLARE_ACCOUNT_ID=\"caaf4c66f911a93355bb85a73596021f\" npx wrangler d1 execute brain-trust-db --remote --command \"DELETE FROM messages WHERE user_id = ''2a441758-48f2-49dc-a0e7-6d424a686428''; DELETE FROM groups WHERE created_by = ''2a441758-48f2-49dc-a0e7-6d424a686428'';\")",
+      "Bash(CLOUDFLARE_API_TOKEN=\"35mJt6ReV2HByTJDnh9jFts-_vGRaQ3qIx10HuKR\" CLOUDFLARE_ACCOUNT_ID=\"caaf4c66f911a93355bb85a73596021f\" npx wrangler d1 execute brain-trust-db --remote --command \"SELECT * FROM users LIMIT 5;\")",
+      "Bash(CLOUDFLARE_API_TOKEN=\"35mJt6ReV2HByTJDnh9jFts-_vGRaQ3qIx10HuKR\" CLOUDFLARE_ACCOUNT_ID=\"caaf4c66f911a93355bb85a73596021f\" npx wrangler d1 execute brain-trust-db --remote --command \"DELETE FROM users WHERE email = ''test@kartel.ai'';\")",
+      "Bash(cd:*)"
     ]
   }
 }

@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(CLOUDFLARE_API_TOKEN=\"35mJt6ReV2HByTJDnh9jFts-_vGRaQ3qIx10HuKR\" CLOUDFLARE_ACCOUNT_ID=\"caaf4c66f911a93355bb85a73596021f\" npx wrangler d1 execute brain-trust-db --remote --command \"DELETE FROM group_members WHERE user_id = ''2a441758-48f2-49dc-a0e7-6d424a686428'';\")"
+    ]
+  }
+}

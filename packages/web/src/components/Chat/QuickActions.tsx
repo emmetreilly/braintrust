@@ -3,6 +3,7 @@ interface QuickActionsProps {
 }
 
 const actions = [
+  { id: 'docs', label: '📄 Docs', tip: 'View and create documents' },
   { id: 'catchup', label: '🧠 Catch up', tip: 'Get summary of what you missed' },
   { id: 'weekly', label: '📝 Weekly', tip: 'Weekly conversation summary' },
   { id: 'factcheck', label: '✓ Fact check', tip: 'Verify claims in conversation' },

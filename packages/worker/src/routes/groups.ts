@@ -1,11 +1,11 @@
 import { Hono } from 'hono'
-import { verifyToken } from '../lib/auth'
+import { verifyToken, encryptApiKey, decryptApiKey } from '../lib/auth'
 import type { Env, Group, User } from '../types'
 
 const groups = new Hono<{ Bindings: Env }>()
 
 // Middleware to get current user
-async function getUser(c: any): Promise<User | null> {
+async function getUser(c: any): Promise<(User & { workspace_id?: string }) | null> {
   const authHeader = c.req.header('Authorization')
   if (!authHeader?.startsWith('Bearer ')) return null
 
@@ -14,7 +14,7 @@ async function getUser(c: any): Promise<User | null> {
   if (!payload) return null
 
   const row = await c.env.DB.prepare(
-    'SELECT id, email, name, avatar_url, interests, created_at FROM users WHERE id = ?'
+    'SELECT id, email, name, avatar_url, interests, created_at, workspace_id FROM users WHERE id = ?'
   )
     .bind(payload.sub)
     .first()
@@ -28,6 +28,7 @@ async function getUser(c: any): Promise<User | null> {
     avatar_url: (row.avatar_url as string) || undefined,
     interests: JSON.parse((row.interests as string) || '[]'),
     created_at: row.created_at as string,
+    workspace_id: (row.workspace_id as string) || undefined,
   }
 }
 
@@ -92,9 +93,9 @@ groups.post('/', async (c) => {
     const inviteCode = generateInviteCode()
 
     await c.env.DB.prepare(
-      'INSERT INTO groups (id, name, invite_code, created_by, preferred_provider) VALUES (?, ?, ?, ?, ?)'
+      'INSERT INTO groups (id, name, invite_code, created_by, preferred_provider, workspace_id) VALUES (?, ?, ?, ?, ?, ?)'
     )
-      .bind(id, name.trim(), inviteCode, user.id, preferred_provider || 'claude')
+      .bind(id, name.trim(), inviteCode, user.id, preferred_provider || 'claude', user.workspace_id || null)
       .run()
 
     // Add creator as admin member
@@ -218,6 +219,161 @@ groups.post('/join/:code', async (c) => {
   } catch (error) {
     console.error('Join group error:', error)
     return c.json({ message: 'Failed to join group' }, 500)
+  }
+})
+
+// Set group API key (admin only)
+groups.put('/:id/api-key', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  const groupId = c.req.param('id')
+
+  try {
+    // Check if user is admin
+    const membership = await c.env.DB.prepare(
+      'SELECT role FROM group_members WHERE group_id = ? AND user_id = ?'
+    )
+      .bind(groupId, user.id)
+      .first<{ role: string }>()
+
+    if (!membership) {
+      return c.json({ message: 'Not a member of this group' }, 403)
+    }
+
+    if (membership.role !== 'admin') {
+      return c.json({ message: 'Only admins can set the API key' }, 403)
+    }
+
+    const { apiKey } = await c.req.json<{ apiKey: string }>()
+
+    if (!apiKey?.trim()) {
+      return c.json({ message: 'API key is required' }, 400)
+    }
+
+    // Basic validation for Claude API key format
+    if (!apiKey.startsWith('sk-ant-')) {
+      return c.json({ message: 'Invalid Claude API key format' }, 400)
+    }
+
+    // Encrypt and store
+    const encrypted = encryptApiKey(apiKey.trim(), c.env.JWT_SECRET)
+
+    await c.env.DB.prepare(
+      'UPDATE groups SET claude_api_key_encrypted = ? WHERE id = ?'
+    )
+      .bind(encrypted, groupId)
+      .run()
+
+    return c.json({ success: true })
+  } catch (error) {
+    console.error('Set API key error:', error)
+    return c.json({ message: 'Failed to set API key' }, 500)
+  }
+})
+
+// Check if group has API key configured
+groups.get('/:id/api-key/status', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  const groupId = c.req.param('id')
+
+  try {
+    // Check membership
+    const membership = await c.env.DB.prepare(
+      'SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?'
+    )
+      .bind(groupId, user.id)
+      .first()
+
+    if (!membership) {
+      return c.json({ message: 'Not a member of this group' }, 403)
+    }
+
+    const row = await c.env.DB.prepare(
+      'SELECT claude_api_key_encrypted FROM groups WHERE id = ?'
+    )
+      .bind(groupId)
+      .first<{ claude_api_key_encrypted: string | null }>()
+
+    return c.json({
+      hasApiKey: !!row?.claude_api_key_encrypted
+    })
+  } catch (error) {
+    console.error('Check API key error:', error)
+    return c.json({ message: 'Failed to check API key' }, 500)
+  }
+})
+
+// Delete group (admin only)
+groups.delete('/:id', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  const groupId = c.req.param('id')
+
+  try {
+    // Check if user is admin
+    const membership = await c.env.DB.prepare(
+      'SELECT role FROM group_members WHERE group_id = ? AND user_id = ?'
+    )
+      .bind(groupId, user.id)
+      .first<{ role: string }>()
+
+    if (!membership) {
+      return c.json({ message: 'Not a member of this group' }, 403)
+    }
+
+    if (membership.role !== 'admin') {
+      return c.json({ message: 'Only admins can delete channels' }, 403)
+    }
+
+    // Delete in order to respect foreign key constraints
+    // Delete messages first
+    await c.env.DB.prepare('DELETE FROM messages WHERE group_id = ?')
+      .bind(groupId)
+      .run()
+
+    // Delete reactions (if any orphaned)
+    await c.env.DB.prepare(`
+      DELETE FROM reactions WHERE message_id NOT IN (SELECT id FROM messages)
+    `).run()
+
+    // Delete private threads and messages
+    const threads = await c.env.DB.prepare('SELECT id FROM private_threads WHERE group_id = ?')
+      .bind(groupId)
+      .all()
+
+    for (const thread of (threads.results || [])) {
+      await c.env.DB.prepare('DELETE FROM private_messages WHERE thread_id = ?')
+        .bind((thread as { id: string }).id)
+        .run()
+    }
+
+    await c.env.DB.prepare('DELETE FROM private_threads WHERE group_id = ?')
+      .bind(groupId)
+      .run()
+
+    // Delete taste profile
+    await c.env.DB.prepare('DELETE FROM taste_profiles WHERE group_id = ?')
+      .bind(groupId)
+      .run()
+
+    // Delete group members
+    await c.env.DB.prepare('DELETE FROM group_members WHERE group_id = ?')
+      .bind(groupId)
+      .run()
+
+    // Finally delete the group
+    await c.env.DB.prepare('DELETE FROM groups WHERE id = ?')
+      .bind(groupId)
+      .run()
+
+    return c.json({ success: true })
+  } catch (error) {
+    console.error('Delete group error:', error)
+    return c.json({ message: 'Failed to delete channel' }, 500)
   }
 })
 

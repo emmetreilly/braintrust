@@ -57,6 +57,7 @@ messages.get('/groups/:groupId/messages', async (c) => {
       return c.json({ message: 'Not a member of this group' }, 403)
     }
 
+    // Filter: show messages that are either public (visible_to IS NULL) or private to current user
     let query = `
       SELECT
         m.id,
@@ -66,15 +67,18 @@ messages.get('/groups/:groupId/messages', async (c) => {
         m.content,
         m.media_data,
         m.ai_provider,
+        m.visible_to,
+        m.parent_message_id,
         m.created_at,
         u.name as author_name,
         u.avatar_url as author_avatar
       FROM messages m
       LEFT JOIN users u ON m.user_id = u.id
-      WHERE m.group_id = ?
+      WHERE m.group_id = ? AND m.deleted_at IS NULL
+        AND (m.visible_to IS NULL OR m.visible_to = ?)
     `
 
-    const params: any[] = [groupId]
+    const params: any[] = [groupId, user.id]
 
     if (cursor) {
       query += ' AND m.created_at < ?'
@@ -121,6 +125,8 @@ messages.get('/groups/:groupId/messages', async (c) => {
       content: row.content,
       media_data: row.media_data || undefined,
       ai_provider: row.ai_provider || undefined,
+      visible_to: row.visible_to || undefined, // If set, only visible to this user
+      parent_message_id: row.parent_message_id || undefined, // For threaded replies
       created_at: row.created_at,
       author: {
         id: row.user_id,
@@ -301,6 +307,58 @@ messages.post('/messages/:messageId/reactions', async (c) => {
   } catch (error) {
     console.error('Reaction error:', error)
     return c.json({ message: 'Failed to add reaction' }, 500)
+  }
+})
+
+// Delete a message (soft delete)
+messages.delete('/messages/:messageId', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  const messageId = c.req.param('messageId')
+
+  try {
+    // Get message to verify ownership or admin status
+    const msg = await c.env.DB.prepare(
+      'SELECT group_id, user_id FROM messages WHERE id = ? AND deleted_at IS NULL'
+    )
+      .bind(messageId)
+      .first()
+
+    if (!msg) {
+      return c.json({ message: 'Message not found' }, 404)
+    }
+
+    // Check if user is the author or an admin
+    const membership = await c.env.DB.prepare(
+      'SELECT role FROM group_members WHERE group_id = ? AND user_id = ?'
+    )
+      .bind(msg.group_id, user.id)
+      .first()
+
+    if (!membership) {
+      return c.json({ message: 'Not a member of this group' }, 403)
+    }
+
+    const isAuthor = msg.user_id === user.id
+    const isAdmin = membership.role === 'admin'
+
+    if (!isAuthor && !isAdmin) {
+      return c.json({ message: 'You can only delete your own messages' }, 403)
+    }
+
+    // Soft delete the message
+    const deletedAt = new Date().toISOString()
+    await c.env.DB.prepare(
+      'UPDATE messages SET deleted_at = ?, deleted_by = ? WHERE id = ?'
+    )
+      .bind(deletedAt, user.id, messageId)
+      .run()
+
+    return c.json({ success: true, deleted_at: deletedAt })
+  } catch (error) {
+    console.error('Delete message error:', error)
+    return c.json({ message: 'Failed to delete message' }, 500)
   }
 })
 

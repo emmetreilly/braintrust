@@ -175,7 +175,7 @@ settings.post('/api-keys/validate', async (c) => {
               'anthropic-version': '2023-06-01',
             },
             body: JSON.stringify({
-              model: 'claude-sonnet-4-20250514',
+              model: 'claude-3-5-sonnet-20241022',
               max_tokens: 10,
               messages: [{ role: 'user', content: 'Hi' }],
             }),
@@ -216,6 +216,123 @@ settings.post('/api-keys/validate', async (c) => {
   } catch (error) {
     console.error('Validate API key error:', error)
     return c.json({ message: 'Failed to validate API key' }, 500)
+  }
+})
+
+// ============ WORKSPACE SETTINGS ============
+
+// Get workspace API key status
+settings.get('/workspace/api-key', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  try {
+    // Get user's workspace
+    const userRow = await c.env.DB.prepare(
+      'SELECT workspace_id FROM users WHERE id = ?'
+    )
+      .bind(user.id)
+      .first()
+
+    if (!userRow?.workspace_id) {
+      return c.json({ message: 'No workspace found' }, 404)
+    }
+
+    const workspace = await c.env.DB.prepare(
+      'SELECT id, name, domain, claude_api_key_encrypted FROM workspaces WHERE id = ?'
+    )
+      .bind(userRow.workspace_id)
+      .first()
+
+    if (!workspace) {
+      return c.json({ message: 'Workspace not found' }, 404)
+    }
+
+    return c.json({
+      workspace: {
+        id: workspace.id,
+        name: workspace.name,
+        domain: workspace.domain,
+      },
+      hasApiKey: !!workspace.claude_api_key_encrypted,
+    })
+  } catch (error) {
+    console.error('Get workspace API key status error:', error)
+    return c.json({ message: 'Failed to get workspace settings' }, 500)
+  }
+})
+
+// Set workspace API key
+settings.post('/workspace/api-key', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  try {
+    // Get user's workspace
+    const userRow = await c.env.DB.prepare(
+      'SELECT workspace_id FROM users WHERE id = ?'
+    )
+      .bind(user.id)
+      .first()
+
+    if (!userRow?.workspace_id) {
+      return c.json({ message: 'No workspace found' }, 404)
+    }
+
+    const { apiKey } = await c.req.json<{ apiKey: string }>()
+
+    if (!apiKey?.trim()) {
+      return c.json({ message: 'API key is required' }, 400)
+    }
+
+    // Basic validation for Claude API key format
+    if (!apiKey.startsWith('sk-ant-')) {
+      return c.json({ message: 'Invalid Claude API key format. Key should start with sk-ant-' }, 400)
+    }
+
+    // Encrypt and store
+    const encrypted = encryptApiKey(apiKey.trim(), c.env.JWT_SECRET)
+
+    await c.env.DB.prepare(
+      'UPDATE workspaces SET claude_api_key_encrypted = ? WHERE id = ?'
+    )
+      .bind(encrypted, userRow.workspace_id)
+      .run()
+
+    return c.json({ success: true })
+  } catch (error) {
+    console.error('Set workspace API key error:', error)
+    return c.json({ message: 'Failed to set workspace API key' }, 500)
+  }
+})
+
+// Delete workspace API key
+settings.delete('/workspace/api-key', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  try {
+    // Get user's workspace
+    const userRow = await c.env.DB.prepare(
+      'SELECT workspace_id FROM users WHERE id = ?'
+    )
+      .bind(user.id)
+      .first()
+
+    if (!userRow?.workspace_id) {
+      return c.json({ message: 'No workspace found' }, 404)
+    }
+
+    await c.env.DB.prepare(
+      'UPDATE workspaces SET claude_api_key_encrypted = NULL WHERE id = ?'
+    )
+      .bind(userRow.workspace_id)
+      .run()
+
+    return c.json({ success: true })
+  } catch (error) {
+    console.error('Delete workspace API key error:', error)
+    return c.json({ message: 'Failed to delete workspace API key' }, 500)
   }
 })
 

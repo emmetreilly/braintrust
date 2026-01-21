@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS groups (
   invite_code TEXT UNIQUE NOT NULL,
   created_by TEXT NOT NULL,
   preferred_provider TEXT DEFAULT 'claude', -- Default AI provider for the group
+  claude_api_key_encrypted TEXT, -- Group-level Claude API key (encrypted)
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (created_by) REFERENCES users(id)
 );
@@ -202,6 +203,21 @@ CREATE TABLE IF NOT EXISTS recommendations (
   FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
 );
 
+-- Claude documents (shareable AI conversations)
+CREATE TABLE IF NOT EXISTS claude_documents (
+  id TEXT PRIMARY KEY,
+  group_id TEXT NOT NULL,
+  created_by TEXT NOT NULL,
+  title TEXT NOT NULL,
+  conversation_history TEXT NOT NULL, -- JSON array of {role, content, timestamp}
+  is_shared INTEGER DEFAULT 0, -- Whether shared to group chat
+  shared_at DATETIME,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+  FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_messages_group ON messages(group_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(user_id);
@@ -216,3 +232,5 @@ CREATE INDEX IF NOT EXISTS idx_conversation_summaries_group ON conversation_summ
 CREATE INDEX IF NOT EXISTS idx_training_jobs_group ON training_jobs(group_id, status);
 CREATE INDEX IF NOT EXISTS idx_fact_checks_group ON fact_checks(group_id);
 CREATE INDEX IF NOT EXISTS idx_recommendations_group ON recommendations(group_id, status);
+CREATE INDEX IF NOT EXISTS idx_claude_documents_group ON claude_documents(group_id, is_shared);
+CREATE INDEX IF NOT EXISTS idx_claude_documents_user ON claude_documents(created_by);
