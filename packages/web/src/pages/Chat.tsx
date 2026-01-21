@@ -5,17 +5,14 @@ import { useAuthStore } from '../stores/auth'
 import { groups as groupsApi, messages as messagesApi, brain as brainApi, files as filesApi } from '../lib/api'
 import MessageBubble from '../components/Chat/MessageBubble'
 import BrainResponse from '../components/Chat/BrainResponse'
-import MediaCard from '../components/Chat/MediaCard'
 import ChatInput from '../components/Chat/ChatInput'
 import QuickActions from '../components/Chat/QuickActions'
 import PrivateThread from '../components/PrivateThread/PrivateThread'
 import DocumentPanel from '../components/DocumentPanel/DocumentPanel'
-import DocumentViewer from '../components/DocumentPanel/DocumentViewer'
-import ClaudeDocumentCard, { isClaudeDocument } from '../components/Chat/ClaudeDocumentCard'
 import { FileCardInline } from '../components/Chat/FileCard'
 import InsightCard from '../components/Chat/InsightCard'
 import ChannelSidebar from '../components/ChannelSidebar'
-import type { Message, Group, GroupMember, MediaData } from '../types'
+import type { Message, Group, GroupMember } from '../types'
 
 export default function Chat() {
   const { groupId } = useParams<{ groupId: string }>()
@@ -30,10 +27,7 @@ export default function Chat() {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [brainLoading, setBrainLoading] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [showMemorySearch, setShowMemorySearch] = useState(false)
   const [showDocPanel, setShowDocPanel] = useState(false)
-  const [viewingDocument, setViewingDocument] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [showCreateChannel, setShowCreateChannel] = useState(false)
   const [newChannelName, setNewChannelName] = useState('')
@@ -98,18 +92,23 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const handleSend = async () => {
-    if (!input.trim() || !groupId || !user) return
+  const handleSend = async (attachedFile?: { id: string; filename: string }) => {
+    if ((!input.trim() && !attachedFile) || !groupId || !user) return
 
     const messageContent = input.trim()
-    const hasBrainMention = messageContent.toLowerCase().includes('@brain')
+    const hasBrainMention = messageContent.toLowerCase().includes('@brain') || attachedFile
+
+    // If a file is attached, include it in the message content for display
+    const displayContent = attachedFile
+      ? `${messageContent || `Question about "${attachedFile.filename}"`}`
+      : messageContent
 
     const message: Message = {
       id: crypto.randomUUID(),
       group_id: groupId,
       user_id: user.id,
       type: 'text',
-      content: messageContent,
+      content: displayContent,
       created_at: new Date().toISOString(),
       author: user,
     }
@@ -123,15 +122,24 @@ export default function Chat() {
 
     // Persist to database
     try {
-      const savedMsg = await messagesApi.send(groupId, messageContent)
+      const savedMsg = await messagesApi.send(groupId, displayContent)
 
-      // If @brain was mentioned, trigger Brain response publicly
+      // If @brain was mentioned OR a file is attached, trigger Brain response
       if (hasBrainMention) {
         setBrainLoading(true)
         try {
-          const brainResponse = await brainApi.respond(groupId, savedMsg.message.id, messageContent)
-          setMessages((prev) => [...prev, brainResponse.message])
-          sendMessage({ type: 'message', message: brainResponse.message })
+          // If file attached, open private thread with file context instead of public response
+          if (attachedFile) {
+            setPrivateThread({
+              context: messageContent || null,
+              documentId: attachedFile.id,
+              documentName: attachedFile.filename,
+            })
+          } else {
+            const brainResponse = await brainApi.respond(groupId, savedMsg.message.id, messageContent)
+            setMessages((prev) => [...prev, brainResponse.message])
+            sendMessage({ type: 'message', message: brainResponse.message })
+          }
         } catch (err) {
           console.error('Brain failed to respond:', err)
           addBrainMessage("Sorry, I encountered an error. Please try again.")
@@ -161,67 +169,17 @@ export default function Chat() {
   const handleQuickAction = async (action: string) => {
     if (!groupId) return
 
-    if (action === 'private') {
-      setPrivateThread({ context: null })
-      return
-    }
-
-    if (action === 'memory') {
-      setShowMemorySearch(true)
-      return
-    }
-
-    if (action === 'docs') {
-      setShowDocPanel(true)
-      return
-    }
-
-    setBrainLoading(true)
-    try {
-      let response: { response: string }
-
-      switch (action) {
-        case 'catchup':
-          response = await brainApi.summarize(groupId, 'catchup')
-          break
-        case 'weekly':
-          response = await brainApi.summarize(groupId, 'weekly')
-          break
-        case 'factcheck':
-          // Get last few messages for fact checking
-          const recentContent = messages.slice(-5).map(m => m.content).join('\n')
-          response = await brainApi.factCheck(groupId, recentContent)
-          break
-        case 'recommend':
-          response = await brainApi.recommend(groupId, 3)
-          break
-        default:
-          return
+    if (action === 'catchup') {
+      setBrainLoading(true)
+      try {
+        const response = await brainApi.summarize(groupId, 'catchup')
+        addBrainMessage(response.response)
+      } catch (err) {
+        console.error('Catchup failed:', err)
+        addBrainMessage('Sorry, I encountered an error. Please try again.')
+      } finally {
+        setBrainLoading(false)
       }
-
-      addBrainMessage(response.response)
-    } catch (err) {
-      console.error('Brain action failed:', err)
-      addBrainMessage('Sorry, I encountered an error. Please try again.')
-    } finally {
-      setBrainLoading(false)
-    }
-  }
-
-  const handleMemorySearch = async () => {
-    if (!groupId || !searchQuery.trim()) return
-
-    setBrainLoading(true)
-    setShowMemorySearch(false)
-    try {
-      const response = await brainApi.searchMemory(groupId, searchQuery)
-      addBrainMessage(response.response)
-    } catch (err) {
-      console.error('Memory search failed:', err)
-      addBrainMessage('Sorry, I couldn\'t search my memory. Please try again.')
-    } finally {
-      setBrainLoading(false)
-      setSearchQuery('')
     }
   }
 
@@ -506,18 +464,6 @@ export default function Chat() {
                   try {
                     const mediaData = JSON.parse(msg.media_data!)
 
-                    // Claude document
-                    const claudeDoc = isClaudeDocument(msg.media_data)
-                    if (claudeDoc) {
-                      return (
-                        <ClaudeDocumentCard
-                          documentId={claudeDoc.documentId}
-                          title={claudeDoc.title}
-                          onClick={() => setViewingDocument(claudeDoc.documentId)}
-                        />
-                      )
-                    }
-
                     // File upload
                     if (mediaData.type === 'file') {
                       return (
@@ -536,13 +482,7 @@ export default function Chat() {
                       )
                     }
 
-                    // Other media (links, etc)
-                    return (
-                      <MediaCard
-                        media={mediaData as MediaData}
-                        onTap={() => {}}
-                      />
-                    )
+                    return null
                   } catch {
                     return null
                   }
@@ -602,42 +542,6 @@ export default function Chat() {
         </div>
       )}
 
-      {/* Memory Search Modal */}
-      {showMemorySearch && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-zinc-900 rounded-xl p-4 w-full max-w-md">
-            <h3 className="font-medium mb-3">Search Brain's Memory</h3>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="What are you looking for?"
-              className="w-full bg-zinc-800 rounded-lg px-4 py-3 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              autoFocus
-              onKeyDown={(e) => e.key === 'Enter' && handleMemorySearch()}
-            />
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  setShowMemorySearch(false)
-                  setSearchQuery('')
-                }}
-                className="flex-1 bg-zinc-800 rounded-lg py-2 text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleMemorySearch}
-                disabled={!searchQuery.trim()}
-                className="flex-1 bg-cyan-600 rounded-lg py-2 text-sm font-medium disabled:opacity-50"
-              >
-                Search
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Quick Actions */}
       <QuickActions onAction={handleQuickAction} />
 
@@ -648,6 +552,7 @@ export default function Chat() {
         onSend={handleSend}
         onFileUpload={handleFileUpload}
         isUploading={isUploading}
+        groupId={groupId}
       />
       </div>
 
@@ -667,7 +572,12 @@ export default function Chat() {
                 <DocumentPanel
                   groupId={groupId}
                   onDocumentSelect={(doc) => {
-                    setViewingDocument(doc.id)
+                    // Open private thread to ask about the document
+                    setPrivateThread({
+                      context: null,
+                      documentId: doc.id,
+                      documentName: doc.filename,
+                    })
                     setShowDocPanel(false)
                   }}
                   onClose={() => setShowDocPanel(false)}
@@ -680,26 +590,17 @@ export default function Chat() {
             <DocumentPanel
               groupId={groupId}
               onDocumentSelect={(doc) => {
-                setViewingDocument(doc.id)
+                // Open private thread to ask about the document
+                setPrivateThread({
+                  context: null,
+                  documentId: doc.id,
+                  documentName: doc.filename,
+                })
               }}
               onClose={() => setDocPanelCollapsed(true)}
             />
           </div>
         </>
-      )}
-
-      {/* Document Viewer */}
-      {viewingDocument && (
-        <DocumentViewer
-          documentId={viewingDocument}
-          onClose={() => setViewingDocument(null)}
-          onShared={() => {
-            // Refresh messages to show the shared document
-            if (groupId) {
-              messagesApi.list(groupId).then((res) => setMessages(res.messages))
-            }
-          }}
-        />
       )}
 
       {/* Create Channel Modal */}

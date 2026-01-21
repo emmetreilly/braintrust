@@ -772,6 +772,280 @@ brain.post('/private', async (c) => {
   }
 })
 
+// === PERSISTENT PRIVATE THREADS ===
+
+// Get or create a persistent private thread for a user in a channel
+brain.get('/private-thread/:groupId', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  const groupId = c.req.param('groupId')
+  const documentId = c.req.query('documentId') || null
+
+  try {
+    // Check membership
+    const membership = await c.env.DB.prepare(
+      'SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?'
+    )
+      .bind(groupId, user.id)
+      .first()
+
+    if (!membership) {
+      return c.json({ message: 'Not a member of this group' }, 403)
+    }
+
+    // Find existing thread (match on user, group, and optionally document)
+    let thread = await c.env.DB.prepare(`
+      SELECT id, document_id, document_name, created_at, updated_at
+      FROM private_threads
+      WHERE user_id = ? AND group_id = ? AND (document_id = ? OR (document_id IS NULL AND ? IS NULL))
+      ORDER BY updated_at DESC
+      LIMIT 1
+    `)
+      .bind(user.id, groupId, documentId, documentId)
+      .first()
+
+    // If no thread exists, return empty (frontend will create on first message)
+    if (!thread) {
+      return c.json({
+        thread: null,
+        messages: []
+      })
+    }
+
+    // Get messages for this thread
+    const messagesResult = await c.env.DB.prepare(`
+      SELECT id, role, content, created_at
+      FROM private_messages
+      WHERE thread_id = ?
+      ORDER BY created_at ASC
+    `)
+      .bind(thread.id)
+      .all()
+
+    return c.json({
+      thread: {
+        id: thread.id,
+        documentId: thread.document_id,
+        documentName: thread.document_name,
+        createdAt: thread.created_at,
+        updatedAt: thread.updated_at,
+      },
+      messages: (messagesResult.results || []).map((m: any) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        createdAt: m.created_at,
+      })),
+    })
+  } catch (error) {
+    console.error('Get private thread error:', error)
+    return c.json({ message: 'Failed to get private thread' }, 500)
+  }
+})
+
+// Send a message in a persistent private thread
+brain.post('/private-thread/:groupId', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  const groupId = c.req.param('groupId')
+
+  try {
+    const { message, documentId, documentName, context } = await c.req.json<{
+      message: string
+      documentId?: string
+      documentName?: string
+      context?: string
+    }>()
+
+    if (!message?.trim()) {
+      return c.json({ message: 'Message is required' }, 400)
+    }
+
+    // Check membership
+    const membership = await c.env.DB.prepare(
+      'SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?'
+    )
+      .bind(groupId, user.id)
+      .first()
+
+    if (!membership) {
+      return c.json({ message: 'Not a member of this group' }, 403)
+    }
+
+    // Find or create thread
+    let thread = await c.env.DB.prepare(`
+      SELECT id FROM private_threads
+      WHERE user_id = ? AND group_id = ? AND (document_id = ? OR (document_id IS NULL AND ? IS NULL))
+    `)
+      .bind(user.id, groupId, documentId || null, documentId || null)
+      .first()
+
+    const now = new Date().toISOString()
+
+    if (!thread) {
+      // Create new thread
+      const threadId = crypto.randomUUID()
+      await c.env.DB.prepare(`
+        INSERT INTO private_threads (id, user_id, group_id, document_id, document_name, context_text, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+        .bind(threadId, user.id, groupId, documentId || null, documentName || null, context || null, now, now)
+        .run()
+      thread = { id: threadId }
+    } else {
+      // Update timestamp
+      await c.env.DB.prepare('UPDATE private_threads SET updated_at = ? WHERE id = ?')
+        .bind(now, thread.id)
+        .run()
+    }
+
+    // Get existing messages for context
+    const existingMessages = await c.env.DB.prepare(`
+      SELECT role, content FROM private_messages
+      WHERE thread_id = ?
+      ORDER BY created_at ASC
+    `)
+      .bind(thread.id)
+      .all()
+
+    const history = (existingMessages.results || []).map((m: any) => ({
+      role: m.role,
+      content: m.content,
+    }))
+
+    // Save user message
+    const userMsgId = crypto.randomUUID()
+    await c.env.DB.prepare(`
+      INSERT INTO private_messages (id, thread_id, role, content, created_at)
+      VALUES (?, ?, 'user', ?, ?)
+    `)
+      .bind(userMsgId, thread.id, message, now)
+      .run()
+
+    // Get group info for reference docs
+    const group = await c.env.DB.prepare('SELECT workspace_id FROM groups WHERE id = ?')
+      .bind(groupId)
+      .first()
+
+    // Get group provider and API key
+    const provider = await getGroupProvider(c.env.DB, groupId)
+    const apiKey = await getApiKey(c.env.DB, groupId, user.id, provider, c.env.JWT_SECRET)
+
+    // Get reference documents
+    let referenceContext = ''
+    if (group?.workspace_id) {
+      const referenceDocs = await getReferenceDocuments(
+        c.env.DB,
+        c.env.R2_BUCKET,
+        groupId,
+        group.workspace_id as string
+      )
+      if (referenceDocs.length > 0) {
+        referenceContext = '\n\nCHANNEL REFERENCE DOCUMENTS (use these as rules/templates/guidelines):\n' +
+          referenceDocs.map(doc =>
+            `=== ${doc.filename} ===\n${doc.content}\n=== end of ${doc.filename} ===`
+          ).join('\n\n')
+      }
+    }
+
+    // Get list of available documents in the channel (just names, not full content)
+    // This tells Brain what files exist without overwhelming context
+    const recentDocuments = await getRecentDocuments(c.env.DB, c.env.R2_BUCKET, groupId, 10)
+    let channelDocsContext = ''
+    if (recentDocuments.length > 0 && !documentId) {
+      // Only show doc list when NOT focused on a specific document
+      // Don't include full content - just names so Brain knows what's available
+      channelDocsContext = '\n\nDOCUMENTS AVAILABLE IN THIS CHANNEL:\n' +
+        recentDocuments.map(doc => `- "${doc.filename}" (shared by ${doc.uploadedBy})`).join('\n') +
+        '\n\nIf the user asks about a specific document, let them know they can click "Ask Brain" on that file for detailed analysis.'
+    }
+
+    // Get document content if documentId provided (for focused document conversation)
+    let documentContext = ''
+    if (documentId) {
+      const doc = await c.env.DB.prepare('SELECT filename, content_text, r2_key FROM documents WHERE id = ?')
+        .bind(documentId)
+        .first()
+
+      if (doc) {
+        let content = doc.content_text as string
+
+        if (!content && doc.r2_key) {
+          try {
+            const object = await c.env.R2_BUCKET.get(doc.r2_key as string)
+            if (object) {
+              const text = await object.text()
+              if (text && !text.includes('\0') && text.length < 100000) {
+                content = text
+                await c.env.DB.prepare('UPDATE documents SET content_text = ? WHERE id = ?')
+                  .bind(content.slice(0, 50000), documentId)
+                  .run()
+              }
+            }
+          } catch (e) {
+            console.error('Failed to read document from R2:', e)
+          }
+        }
+
+        if (content) {
+          documentContext = `\n\nDOCUMENT CONTENT ("${doc.filename}"):\n--- START OF DOCUMENT ---\n${content.slice(0, 50000)}\n--- END OF DOCUMENT ---\n\nThe user is asking about this document.`
+        }
+      }
+    }
+
+    // Build system prompt with all context layers
+    const fullContext = [referenceContext, channelDocsContext, context, documentContext].filter(Boolean).join('\n')
+    const systemPrompt = getPrivateSystemPrompt({
+      userName: user.name,
+      contextMessage: fullContext || undefined,
+    })
+
+    // Build messages for AI
+    const aiMessages = [
+      ...history.map((h: any) => ({
+        role: (h.role === 'brain' ? 'assistant' : 'user') as 'user' | 'assistant',
+        content: h.content,
+      })),
+      { role: 'user' as const, content: message },
+    ]
+
+    // Call AI
+    const response = await callAI(provider, apiKey, systemPrompt, aiMessages)
+
+    // Save Brain response
+    const brainMsgId = crypto.randomUUID()
+    const brainNow = new Date().toISOString()
+    await c.env.DB.prepare(`
+      INSERT INTO private_messages (id, thread_id, role, content, ai_provider, created_at)
+      VALUES (?, ?, 'brain', ?, ?, ?)
+    `)
+      .bind(brainMsgId, thread.id, response.content, response.provider, brainNow)
+      .run()
+
+    return c.json({
+      threadId: thread.id,
+      userMessage: {
+        id: userMsgId,
+        role: 'user',
+        content: message,
+        createdAt: now,
+      },
+      brainMessage: {
+        id: brainMsgId,
+        role: 'brain',
+        content: response.content,
+        createdAt: brainNow,
+      },
+    })
+  } catch (error) {
+    console.error('Private thread message error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    return c.json({ message: `Brain encountered an error: ${errorMessage}` }, 500)
+  }
+})
+
 // Fact check a claim or message
 brain.post('/fact-check', async (c) => {
   const user = await getUser(c)

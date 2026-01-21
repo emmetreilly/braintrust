@@ -158,6 +158,23 @@ export const brain = {
       method: 'POST',
       body: JSON.stringify({ groupId, parentMessageId, question }),
     }),
+
+  // Persistent private threads
+  getPrivateThread: (groupId: string, documentId?: string) =>
+    fetchApi<{
+      thread: { id: string; documentId?: string; documentName?: string; createdAt: string; updatedAt: string } | null
+      messages: { id: string; role: 'user' | 'brain'; content: string; createdAt: string }[]
+    }>(`/brain/private-thread/${groupId}${documentId ? `?documentId=${documentId}` : ''}`),
+
+  sendPrivateMessage: (groupId: string, message: string, documentId?: string, documentName?: string, context?: string) =>
+    fetchApi<{
+      threadId: string
+      userMessage: { id: string; role: 'user'; content: string; createdAt: string }
+      brainMessage: { id: string; role: 'brain'; content: string; createdAt: string }
+    }>(`/brain/private-thread/${groupId}`, {
+      method: 'POST',
+      body: JSON.stringify({ message, documentId, documentName, context }),
+    }),
 }
 
 // Media

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { brain, messages as messagesApi } from '../../lib/api'
 
 interface PrivateThreadProps {
@@ -11,25 +11,66 @@ interface PrivateThreadProps {
 }
 
 interface ThreadMessage {
+  id?: string
   role: 'user' | 'brain'
   content: string
 }
 
-const quickPrompts = ['Summarize this', 'Key points', 'What questions should I ask?', 'Draft a message']
-
 export default function PrivateThread({ groupId, context, documentId, documentName, onClose, onShareInsight }: PrivateThreadProps) {
-  const [messages, setMessages] = useState<ThreadMessage[]>([
-    {
-      role: 'brain',
-      content: documentName
-        ? `I've loaded "${documentName}". What would you like to know about it? You can ask me to summarize, find key points, or answer specific questions.`
-        : "Private thread — only you can see this. I can go deeper on anything, fact-check, help draft a reply, or find related stuff.",
-    },
-  ])
+  const [messages, setMessages] = useState<ThreadMessage[]>([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingThread, setIsLoadingThread] = useState(true)
   const [selectedMessage, setSelectedMessage] = useState<number | null>(null)
   const [sharing, setSharing] = useState(false)
+
+  // Load existing thread on mount
+  useEffect(() => {
+    const loadThread = async () => {
+      try {
+        const { messages: savedMessages } = await brain.getPrivateThread(groupId, documentId)
+
+        if (savedMessages && savedMessages.length > 0) {
+          // Load persisted messages
+          setMessages(savedMessages.map(m => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+          })))
+          setIsLoadingThread(false)
+        } else {
+          // New thread - show welcome and auto-send context if provided
+          setMessages([{
+            role: 'brain',
+            content: documentName
+              ? `I've loaded "${documentName}". What would you like to know about it? You can ask me to summarize, find key points, or answer specific questions.`
+              : "Private thread — only you can see this. I can go deeper on anything, fact-check, help draft a reply, or find related stuff.",
+          }])
+          setIsLoadingThread(false)
+
+          // If context was provided (user typed a question before opening thread), auto-send it
+          if (context && context.trim()) {
+            // Use setTimeout to let state settle before auto-sending
+            setTimeout(() => {
+              setInput(context)
+            }, 100)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load thread:', err)
+        // Show welcome message on error
+        setMessages([{
+          role: 'brain',
+          content: documentName
+            ? `I've loaded "${documentName}". What would you like to know about it?`
+            : "Private thread — only you can see this. How can I help?",
+        }])
+        setIsLoadingThread(false)
+      }
+    }
+
+    loadThread()
+  }, [groupId, documentId, documentName, context])
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return
@@ -40,20 +81,32 @@ export default function PrivateThread({ groupId, context, documentId, documentNa
     setIsLoading(true)
 
     try {
-      // Build context with document info
-      const fullContext = documentName
-        ? `User is asking about document: "${documentName}". ${context || ''}`
-        : context || undefined
-
-      const { response } = await brain.private(
+      // Use persistent thread API
+      const { userMessage: savedUserMsg, brainMessage } = await brain.sendPrivateMessage(
         groupId,
         input,
-        fullContext,
-        messages.map((m) => ({ role: m.role === 'brain' ? 'assistant' : 'user', content: m.content })),
-        documentId // Pass documentId so backend can fetch actual content
+        documentId,
+        documentName,
+        context || undefined
       )
-      setMessages((prev) => [...prev, { role: 'brain', content: response }])
-    } catch {
+
+      // Update with actual saved messages (with IDs)
+      setMessages((prev) => {
+        const updated = [...prev]
+        // Update the last user message with the saved ID
+        if (updated.length > 0 && updated[updated.length - 1].role === 'user') {
+          updated[updated.length - 1].id = savedUserMsg.id
+        }
+        // Add brain response
+        updated.push({
+          id: brainMessage.id,
+          role: 'brain',
+          content: brainMessage.content,
+        })
+        return updated
+      })
+    } catch (err) {
+      console.error('Failed to send message:', err)
       setMessages((prev) => [
         ...prev,
         { role: 'brain', content: 'Sorry, something went wrong. Please try again.' },
@@ -113,7 +166,10 @@ export default function PrivateThread({ groupId, context, documentId, documentNa
     <div className="bg-zinc-950 min-h-screen text-white max-w-md mx-auto flex flex-col">
       {/* Header */}
       <div className="p-4 border-b border-zinc-800 flex items-center gap-3">
-        <button onClick={onClose} className="text-zinc-400 hover:text-white">
+        <button
+          onClick={onClose}
+          className="w-10 h-10 flex items-center justify-center rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
+        >
           ←
         </button>
         <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center">
@@ -140,49 +196,59 @@ export default function PrivateThread({ groupId, context, documentId, documentNa
 
       {/* Messages */}
       <div className="flex-1 overflow-auto p-4 space-y-3 hide-scrollbar">
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`flex gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
-          >
-            {msg.role === 'brain' && (
-              <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-sm shrink-0">
-                🧠
-              </div>
-            )}
-            <div className="flex flex-col gap-1">
-              <div
-                onClick={() => msg.role === 'brain' && i > 0 && setSelectedMessage(selectedMessage === i ? null : i)}
-                className={`max-w-xs rounded-2xl px-4 py-3 ${
-                  msg.role === 'user'
-                    ? 'bg-cyan-600 rounded-br-sm'
-                    : 'bg-zinc-900 rounded-bl-sm cursor-pointer hover:bg-zinc-800/80'
-                } ${selectedMessage === i ? 'ring-2 ring-cyan-500' : ''}`}
-              >
-                <p className="text-sm whitespace-pre-line">{msg.content}</p>
-              </div>
-              {/* Share button for selected Brain messages */}
-              {selectedMessage === i && msg.role === 'brain' && i > 0 && (
-                <button
-                  onClick={() => handleShareToGroup(i)}
-                  disabled={sharing}
-                  className="self-start ml-10 flex items-center gap-1.5 text-xs bg-cyan-500/20 text-cyan-400 px-3 py-1.5 rounded-full hover:bg-cyan-500/30 transition-colors disabled:opacity-50"
-                >
-                  {sharing ? (
-                    'Sharing...'
-                  ) : (
-                    <>
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                      </svg>
-                      Share to group
-                    </>
-                  )}
-                </button>
-              )}
+        {isLoadingThread ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="flex gap-1">
+              <div className="w-2 h-2 bg-zinc-500 rounded-full animate-bounce" />
+              <div className="w-2 h-2 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+              <div className="w-2 h-2 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
             </div>
           </div>
-        ))}
+        ) : (
+          messages.map((msg, i) => (
+            <div
+              key={msg.id || i}
+              className={`flex gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
+            >
+              {msg.role === 'brain' && (
+                <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-sm shrink-0">
+                  🧠
+                </div>
+              )}
+              <div className="flex flex-col gap-1">
+                <div
+                  onClick={() => msg.role === 'brain' && i > 0 && setSelectedMessage(selectedMessage === i ? null : i)}
+                  className={`max-w-xs rounded-2xl px-4 py-3 ${
+                    msg.role === 'user'
+                      ? 'bg-cyan-600 rounded-br-sm'
+                      : 'bg-zinc-900 rounded-bl-sm cursor-pointer hover:bg-zinc-800/80'
+                  } ${selectedMessage === i ? 'ring-2 ring-cyan-500' : ''}`}
+                >
+                  <p className="text-sm whitespace-pre-line">{msg.content}</p>
+                </div>
+                {/* Share button for selected Brain messages */}
+                {selectedMessage === i && msg.role === 'brain' && i > 0 && (
+                  <button
+                    onClick={() => handleShareToGroup(i)}
+                    disabled={sharing}
+                    className="self-start ml-10 flex items-center gap-1.5 text-xs bg-cyan-500/20 text-cyan-400 px-3 py-1.5 rounded-full hover:bg-cyan-500/30 transition-colors disabled:opacity-50"
+                  >
+                    {sharing ? (
+                      'Sharing...'
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                        </svg>
+                        Share to group
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
+        )}
         {isLoading && (
           <div className="flex gap-2">
             <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-sm">
@@ -203,24 +269,6 @@ export default function PrivateThread({ groupId, context, documentId, documentNa
             </div>
           </div>
         )}
-      </div>
-
-      {/* Tip */}
-      <div className="px-4 py-2 text-xs text-zinc-600 text-center">
-        Tap any Brain response to share it with the group
-      </div>
-
-      {/* Quick Prompts */}
-      <div className="px-4 py-2 flex gap-2 overflow-x-auto border-t border-zinc-900 hide-scrollbar">
-        {quickPrompts.map((prompt) => (
-          <button
-            key={prompt}
-            onClick={() => setInput(prompt)}
-            className="text-xs bg-zinc-900 px-3 py-2 rounded-full whitespace-nowrap hover:bg-zinc-800 transition-colors"
-          >
-            {prompt}
-          </button>
-        ))}
       </div>
 
       {/* Input */}

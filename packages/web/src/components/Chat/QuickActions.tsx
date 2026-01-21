@@ -3,13 +3,7 @@ interface QuickActionsProps {
 }
 
 const actions = [
-  { id: 'docs', label: '📄 Docs', tip: 'View and create documents' },
-  { id: 'catchup', label: '🧠 Catch up', tip: 'Get summary of what you missed' },
-  { id: 'weekly', label: '📝 Weekly', tip: 'Weekly conversation summary' },
-  { id: 'factcheck', label: '✓ Fact check', tip: 'Verify claims in conversation' },
-  { id: 'recommend', label: '💡 Recommend', tip: 'Get content suggestions' },
-  { id: 'memory', label: '🔍 Memory', tip: 'Search past conversations' },
-  { id: 'private', label: '💭 Private', tip: 'Chat privately with Brain' },
+  { id: 'catchup', label: '🧠 Catch me up', tip: 'Summary of last 24 hours, recent docs' },
 ]
 
 export default function QuickActions({ onAction }: QuickActionsProps) {
