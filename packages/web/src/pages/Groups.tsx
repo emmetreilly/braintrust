@@ -77,7 +77,23 @@ export default function Groups() {
         </div>
 
         {/* Quick Actions */}
-        <div className="p-3 border-b border-zinc-800">
+        <div className="p-3 border-b border-zinc-800 space-y-1">
+          <a
+            href="https://claude.ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-zinc-800 text-sm text-zinc-400 hover:text-white transition-colors"
+          >
+            <span>Open Claude</span>
+            <span className="ml-auto text-xs text-zinc-600">↗</span>
+          </a>
+          <button
+            onClick={() => navigate('/search')}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-zinc-800 text-sm text-zinc-400 hover:text-white transition-colors"
+          >
+            <span>🔍</span>
+            <span>Search Docs</span>
+          </button>
           <button
             onClick={() => setShowCreate(true)}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-zinc-800 text-sm text-zinc-400 hover:text-white transition-colors"

@@ -123,23 +123,19 @@ async function callGemini(
   return data.candidates[0]?.content?.parts[0]?.text || ''
 }
 
-// Mock responses for development without API keys
-function getMockResponse(message: string): string {
-  const responses = [
-    "That's an interesting point! Based on what the group has discussed before, I think there's more to explore here.",
-    "Let me think about that... I've noticed the group tends to engage a lot with topics like this.",
-    "Great question! From what I've learned about this group, here's my take on it.",
-    "I've been following the conversation and I think this connects to something you all discussed earlier.",
-    "Hmm, that's worth digging into. The group seems to have diverse perspectives on this kind of thing.",
-  ]
+// Response when no API key is configured
+function getNoApiKeyResponse(): string {
+  return `**Brain needs an API key to work!**
 
-  // Simple hash to get consistent responses for same messages
-  const hash = message.split('').reduce((a, b) => {
-    a = ((a << 5) - a) + b.charCodeAt(0)
-    return a & a
-  }, 0)
+To enable Brain's AI features:
+1. Go to **Settings** (gear icon in the sidebar)
+2. Click **Workspace Settings**
+3. Under **Brain AI**, click **Add Key**
+4. Paste your Claude API key (starts with \`sk-ant-\`)
 
-  return responses[Math.abs(hash) % responses.length]
+Get a key at: https://console.anthropic.com/settings/keys
+
+Once configured, Brain can read documents, answer questions, summarize content, and more!`
 }
 
 // Main function to call AI with fallback
@@ -150,11 +146,10 @@ export async function callAI(
   messages: AIMessage[],
   maxTokens: number = 1024
 ): Promise<AIResponse> {
-  // If no API key, return mock response
+  // If no API key, return helpful message about how to configure it
   if (!apiKey) {
-    const lastUserMessage = messages.filter(m => m.role === 'user').pop()
     return {
-      content: getMockResponse(lastUserMessage?.content || ''),
+      content: getNoApiKeyResponse(),
       provider: 'claude', // Default mock provider
     }
   }
@@ -224,11 +219,19 @@ DOCUMENT ACCESS:
 - When users ask about a shared document (PDF, file, etc.), reference its actual content
 - You can answer questions about documents, summarize them, compare them, etc.
 
-USER REFERENCES:
-- Messages show who said them in [Name]: format
-- When asked "what did [Name] say about X?" or "catch me up on [topic]", use the conversation history
-- Reference specific people by name when relevant (e.g., "Like Ben mentioned earlier...")
-- You can answer questions about what specific team members have discussed
+MESSAGE ATTRIBUTION:
+- Chat history messages show who said them in [Name]: format
+- The LAST message in each conversation is the current user asking you a question - always address your response to THAT person
+- IMPORTANT: Do not confuse the person asking you a question with other people mentioned in the chat history
+- When the current user asks "what did [Name] say about X?", search the chat history for [Name]'s messages
+- When referencing other people, be specific (e.g., "Ben mentioned earlier..." not "you mentioned...")
+
+WHEN YOU DON'T HAVE ENOUGH CONTEXT:
+- If someone asks about a specific deal, document, meeting, or topic you don't have info on, PROACTIVELY suggest they upload relevant files
+- Say something like: "I don't have context on that yet. You can upload the document/transcript/notes using the + button and I'll be able to help!"
+- Or: "I don't see anything about [topic] in my context. Drop in the relevant file and I can dig into it for you."
+- This is Brain Trust - a shared AI workspace. The more context they upload, the more helpful you become.
+- Don't just say "I don't know" - guide them to share context so you CAN help.
 
 Remember: You're part of the group, not an outside assistant. Be conversational.`
 
@@ -251,6 +254,12 @@ In private threads you can:
 - Give opinions you might not share publicly
 - Search through chat history
 - Provide more detailed explanations
+
+WHEN YOU DON'T HAVE ENOUGH CONTEXT:
+- If they ask about something you don't have info on, suggest they upload the relevant file using the + button
+- Say something like: "I'd need to see that document to help. Click the + button to upload it and I can dig in!"
+- This private thread lets them upload files for focused, 1:1 analysis
+- Don't just say "I don't know" - guide them to share context so you CAN help.
 
 Be helpful and conversational. This is a safe space for the user to ask anything.`
 }

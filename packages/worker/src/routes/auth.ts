@@ -106,24 +106,14 @@ auth.post('/signup', async (c) => {
       .bind(id, email.toLowerCase(), passwordHash, name, '[]', workspace.id)
       .run()
 
-    // Auto-join user to all existing workspace channels
-    const workspaceGroups = await c.env.DB.prepare(
-      'SELECT id FROM groups WHERE workspace_id = ?'
+    // Link to org profile if one exists for this email
+    await c.env.DB.prepare(
+      'UPDATE org_profiles SET user_id = ? WHERE workspace_id = ? AND email = ? AND user_id IS NULL'
     )
-      .bind(workspace.id)
-      .all()
+      .bind(id, workspace.id, email.toLowerCase())
+      .run()
 
-    for (const group of (workspaceGroups.results || [])) {
-      try {
-        await c.env.DB.prepare(
-          'INSERT OR IGNORE INTO group_members (group_id, user_id, role) VALUES (?, ?, ?)'
-        )
-          .bind((group as { id: string }).id, id, 'member')
-          .run()
-      } catch {
-        // Ignore if already a member
-      }
-    }
+    // Note: Users must be invited to channels - no auto-join
 
     const user: User = {
       id,
@@ -333,24 +323,7 @@ auth.get('/google/callback', async (c) => {
         .bind(userId, email, 'GOOGLE_OAUTH_USER', googleUser.name, googleUser.picture || null, '[]', workspace.id)
         .run()
 
-      // Auto-join user to all existing workspace channels
-      const workspaceGroups = await c.env.DB.prepare(
-        'SELECT id FROM groups WHERE workspace_id = ?'
-      )
-        .bind(workspace.id)
-        .all()
-
-      for (const group of (workspaceGroups.results || [])) {
-        try {
-          await c.env.DB.prepare(
-            'INSERT OR IGNORE INTO group_members (group_id, user_id, role) VALUES (?, ?, ?)'
-          )
-            .bind((group as { id: string }).id, userId, 'member')
-            .run()
-        } catch {
-          // Ignore if already a member
-        }
-      }
+      // Note: Users must be invited to channels - no auto-join
 
       userRow = {
         id: userId,

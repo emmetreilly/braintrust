@@ -77,6 +77,26 @@ export const groups = {
     fetchApi<{ success: boolean }>(`/groups/${id}`, {
       method: 'DELETE',
     }),
+
+  invite: (groupId: string, userId: string) =>
+    fetchApi<{ success: boolean; member: { user_id: string; name: string; email: string; role: string } }>(`/groups/${groupId}/invite`, {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    }),
+
+  inviteByEmail: (groupId: string, email: string) =>
+    fetchApi<{ success: boolean; member: { user_id: string; name: string; email: string; role: string } }>(`/groups/${groupId}/invite`, {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  removeMember: (groupId: string, userId: string) =>
+    fetchApi<{ success: boolean }>(`/groups/${groupId}/members/${userId}`, {
+      method: 'DELETE',
+    }),
+
+  workspaceUsers: (groupId: string) =>
+    fetchApi<{ users: { id: string; name: string; email: string; avatar_url?: string }[] }>(`/groups/${groupId}/workspace-users`),
 }
 
 // Messages
@@ -175,6 +195,88 @@ export const brain = {
       method: 'POST',
       body: JSON.stringify({ message, documentId, documentName, context }),
     }),
+
+  // Streaming API for Claude-like experience
+  streamPrivateMessage: async (
+    groupId: string,
+    message: string,
+    onChunk: (chunk: string) => void,
+    onComplete: (fullResponse: string) => void,
+    onError: (error: Error) => void,
+    documentId?: string,
+    documentName?: string,
+    context?: string
+  ): Promise<void> => {
+    const token = localStorage.getItem('token')
+
+    try {
+      const response = await fetch(`${API_BASE}/brain/private-thread/${groupId}/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ message, documentId, documentName, context }),
+      })
+
+      if (!response.ok) {
+        // Fallback to non-streaming if stream endpoint doesn't exist
+        if (response.status === 404) {
+          const fallback = await brain.sendPrivateMessage(groupId, message, documentId, documentName, context)
+          onComplete(fallback.brainMessage.content)
+          return
+        }
+        throw new Error('Stream request failed')
+      }
+
+      const reader = response.body?.getReader()
+      if (!reader) {
+        throw new Error('No response body')
+      }
+
+      const decoder = new TextDecoder()
+      let fullResponse = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value, { stream: true })
+
+        // Parse SSE format
+        const lines = chunk.split('\n')
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6)
+            if (data === '[DONE]') {
+              onComplete(fullResponse)
+              return
+            }
+            try {
+              const parsed = JSON.parse(data)
+              if (parsed.content) {
+                fullResponse += parsed.content
+                onChunk(parsed.content)
+              } else if (parsed.text) {
+                fullResponse += parsed.text
+                onChunk(parsed.text)
+              }
+            } catch {
+              // Not JSON, treat as raw content
+              if (data.trim()) {
+                fullResponse += data
+                onChunk(data)
+              }
+            }
+          }
+        }
+      }
+
+      onComplete(fullResponse)
+    } catch (error) {
+      onError(error as Error)
+    }
+  },
 }
 
 // Media
@@ -305,6 +407,19 @@ export const files = {
       method: 'PUT',
       body: JSON.stringify({ is_reference: isReference, group_id: groupId }),
     }),
+
+  // Create document from pasted text content (auto-indexes for @brain)
+  createFromText: (title: string, content: string, groupId: string) =>
+    fetchApi<{ document: import('../types').Document }>('/documents/text', {
+      method: 'POST',
+      body: JSON.stringify({ title, content, groupId }),
+    }),
+
+  // Extract text content from a document (for DOCX, PDF, etc.)
+  extract: (documentId: string) =>
+    fetchApi<{ success: boolean; content_text?: string; content_length?: number; message?: string }>(`/documents/${documentId}/extract`, {
+      method: 'POST',
+    }),
 }
 
 // Settings
@@ -324,6 +439,80 @@ export const settings = {
     fetchApi<{ success: boolean }>('/settings/workspace/api-key', {
       method: 'DELETE',
     }),
+
+  // Workspace Reference Docs (Company Brain)
+  getWorkspaceReferenceDocs: () =>
+    fetchApi<{ documents: { id: string; filename: string; file_size: number; created_at: string; created_by: string }[] }>(
+      '/settings/workspace/reference-docs'
+    ),
+
+  addWorkspaceReferenceDoc: (filename: string, content: string) =>
+    fetchApi<{ document: { id: string; filename: string; file_size: number; created_at: string } }>(
+      '/settings/workspace/reference-docs',
+      {
+        method: 'POST',
+        body: JSON.stringify({ filename, content }),
+      }
+    ),
+
+  deleteWorkspaceReferenceDoc: (id: string) =>
+    fetchApi<{ success: boolean }>(`/settings/workspace/reference-docs/${id}`, {
+      method: 'DELETE',
+    }),
+
+  // Channel Reference Docs
+  getChannelReferenceDocs: (groupId: string) =>
+    fetchApi<{ documents: { id: string; filename: string; is_reference: boolean; file_size: number; created_at: string; uploaded_by?: string }[] }>(
+      `/settings/channel/${groupId}/reference-docs`
+    ),
+
+  toggleChannelReferenceDoc: (groupId: string, docId: string) =>
+    fetchApi<{ success: boolean; isReference: boolean }>(
+      `/settings/channel/${groupId}/reference-docs/${docId}/toggle`,
+      { method: 'POST' }
+    ),
+
+  uploadChannelDoc: (groupId: string, filename: string, content: string, pinAsReference?: boolean) =>
+    fetchApi<{ document: { id: string; filename: string; file_size: number; is_reference: boolean; created_at: string; uploaded_by: string }; messageId: string }>(
+      `/settings/channel/${groupId}/upload-doc`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ filename, content, pinAsReference }),
+      }
+    ),
+
+  // Org Profiles (Employee Data)
+  getOrgProfiles: () =>
+    fetchApi<{ profiles: OrgProfile[] }>('/settings/workspace/org-profiles'),
+
+  uploadOrgCSV: (csvContent: string, replaceExisting?: boolean) =>
+    fetchApi<{ success: boolean; inserted: number; updated: number; total: number; referenceDocId: string }>(
+      '/settings/workspace/org-profiles/upload-csv',
+      {
+        method: 'POST',
+        body: JSON.stringify({ csvContent, replaceExisting }),
+      }
+    ),
+
+  getMyOrgProfile: () =>
+    fetchApi<{ profile: OrgProfile | null }>('/settings/workspace/my-org-profile'),
+}
+
+// OrgProfile type
+export interface OrgProfile {
+  id: string
+  email: string
+  name: string
+  title?: string
+  department?: string
+  reportsTo?: string
+  level?: string
+  alignment?: string
+  jobDescription?: string
+  responsibilities?: string
+  kpis?: string
+  userId?: string
+  linkedUserName?: string
 }
 
 // Combined API object for convenience

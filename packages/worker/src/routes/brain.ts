@@ -150,8 +150,28 @@ async function getRecentMessages(db: D1Database, groupId: string, limit: number 
   })).reverse()
 }
 
-// Get reference documents for the channel (always loaded into context)
-async function getReferenceDocuments(
+// Get workspace-level reference documents (apply to ALL channels)
+async function getWorkspaceReferenceDocuments(
+  db: D1Database,
+  workspaceId: string
+): Promise<{ filename: string; content: string }[]> {
+  const rows = await db.prepare(`
+    SELECT id, filename, content_text
+    FROM workspace_reference_docs
+    WHERE workspace_id = ?
+    ORDER BY filename
+  `)
+    .bind(workspaceId)
+    .all()
+
+  return (rows.results || []).map((row: any) => ({
+    filename: row.filename as string,
+    content: (row.content_text as string).slice(0, 20000),
+  }))
+}
+
+// Get channel-level reference documents (specific to this channel)
+async function getChannelReferenceDocuments(
   db: D1Database,
   r2Bucket: R2Bucket,
   groupId: string,
@@ -203,6 +223,24 @@ async function getReferenceDocuments(
   }
 
   return documents
+}
+
+// Get all reference documents (workspace + channel level)
+async function getReferenceDocuments(
+  db: D1Database,
+  r2Bucket: R2Bucket,
+  groupId: string,
+  workspaceId: string
+): Promise<{ filename: string; content: string; level: 'workspace' | 'channel' }[]> {
+  const [workspaceDocs, channelDocs] = await Promise.all([
+    getWorkspaceReferenceDocuments(db, workspaceId),
+    getChannelReferenceDocuments(db, r2Bucket, groupId, workspaceId),
+  ])
+
+  return [
+    ...workspaceDocs.map(d => ({ ...d, level: 'workspace' as const })),
+    ...channelDocs.map(d => ({ ...d, level: 'channel' as const })),
+  ]
 }
 
 // Get recently shared documents in the group chat
@@ -361,12 +399,39 @@ brain.post('/respond', async (c) => {
       ).join('\n\n')
     }
 
-    // Build system prompt with reference docs, RAG context, and document context
+    // Get current user's org profile for personalized responses
+    let userOrgContext = ''
+    if (group.workspace_id) {
+      const orgProfile = await c.env.DB.prepare(`
+        SELECT name, title, department, reports_to_email, level, alignment, job_description, responsibilities, kpis
+        FROM org_profiles WHERE user_id = ?
+      `)
+        .bind(user.id)
+        .first()
+
+      if (orgProfile) {
+        userOrgContext = `\n\nCURRENT USER'S ROLE IN THE ORGANIZATION:
+Name: ${orgProfile.name}
+Title: ${orgProfile.title || 'N/A'}
+Department: ${orgProfile.department || 'N/A'}
+Reports To: ${orgProfile.reports_to_email || 'N/A'}
+Level: ${orgProfile.level || 'N/A'}
+Strategic Alignment: ${orgProfile.alignment || 'N/A'}
+Job Description: ${orgProfile.job_description || 'N/A'}
+Core Responsibilities: ${orgProfile.responsibilities || 'N/A'}
+KPIs: ${orgProfile.kpis || 'N/A'}
+
+Use this information to personalize your responses - help them with tasks relevant to their role,
+understand what they're accountable for, and provide context-aware assistance.`
+      }
+    }
+
+    // Build system prompt with reference docs, RAG context, document context, and user org context
     const systemPrompt = getBrainSystemPrompt({
       groupName: group.name as string,
       interests: [],
       recentTopics: recentMessages.slice(-5).map(m => `${m.userName}: ${m.content}`),
-      ragContext: referenceContext + ragContext + documentContext,
+      ragContext: referenceContext + ragContext + documentContext + userOrgContext,
     })
 
     // Build conversation history with attribution
@@ -382,7 +447,7 @@ brain.post('/respond', async (c) => {
       systemPrompt,
       [
         ...conversationHistory,
-        { role: 'user' as const, content: `[${user.name}]: ${content}` },
+        { role: 'user' as const, content: `[CURRENT USER - ${user.name}]: ${content}` },
       ]
     )
 
@@ -594,7 +659,7 @@ You're now answering follow-up questions from the team. Be helpful, concise, and
         role: h.role as 'user' | 'assistant',
         content: h.content,
       })),
-      { role: 'user' as const, content: `[${user.name}]: ${question.trim()}` },
+      { role: 'user' as const, content: `[CURRENT USER - ${user.name}]: ${question.trim()}` },
     ]
 
     // Call AI
@@ -964,24 +1029,116 @@ brain.post('/private-thread/:groupId', async (c) => {
 
     // Get document content if documentId provided (for focused document conversation)
     let documentContext = ''
+    console.log('Private thread - documentId:', documentId, 'apiKey exists:', !!apiKey)
     if (documentId) {
-      const doc = await c.env.DB.prepare('SELECT filename, content_text, r2_key FROM documents WHERE id = ?')
+      const doc = await c.env.DB.prepare('SELECT filename, content_text, r2_key, file_type, mime_type FROM documents WHERE id = ?')
         .bind(documentId)
         .first()
+      console.log('Private thread - doc found:', !!doc, 'filename:', doc?.filename, 'has content_text:', !!doc?.content_text, 'r2_key:', doc?.r2_key)
 
       if (doc) {
         let content = doc.content_text as string
 
         if (!content && doc.r2_key) {
+          console.log('Private thread - no content_text, fetching from R2...')
           try {
             const object = await c.env.R2_BUCKET.get(doc.r2_key as string)
+            console.log('Private thread - R2 object found:', !!object, 'size:', object?.size)
             if (object) {
-              const text = await object.text()
-              if (text && !text.includes('\0') && text.length < 100000) {
-                content = text
-                await c.env.DB.prepare('UPDATE documents SET content_text = ? WHERE id = ?')
-                  .bind(content.slice(0, 50000), documentId)
-                  .run()
+              // Check if it's a document that needs Claude extraction (PDF, DOCX, etc.)
+              const filename = doc.filename as string
+              const isDocx = doc.file_type === 'doc' || (doc.mime_type as string)?.includes('word') || filename?.endsWith('.docx') || filename?.endsWith('.doc')
+              const isPdf = doc.file_type === 'pdf' || doc.mime_type === 'application/pdf'
+              const isSpreadsheet = doc.file_type === 'spreadsheet' || (doc.mime_type as string)?.includes('sheet') || (doc.mime_type as string)?.includes('excel') || filename?.endsWith('.xlsx') || filename?.endsWith('.xls') || filename?.endsWith('.csv')
+              const isPpt = (doc.mime_type as string)?.includes('presentation') || (doc.mime_type as string)?.includes('powerpoint') || filename?.endsWith('.pptx') || filename?.endsWith('.ppt')
+
+              console.log('Private thread - isDocx:', isDocx, 'isPdf:', isPdf, 'file_type:', doc.file_type, 'mime_type:', doc.mime_type)
+
+              if (isPdf || isDocx || isSpreadsheet || isPpt) {
+                // Use Claude to extract text from binary documents (on-demand extraction)
+                console.log('Private thread - needs Claude extraction, apiKey exists:', !!apiKey)
+                if (apiKey) {
+                  const arrayBuffer = await object.arrayBuffer()
+                  // Use chunked encoding to avoid call stack overflow with large files
+                  const bytes = new Uint8Array(arrayBuffer)
+                  let base64 = ''
+                  const chunkSize = 32768 // 32KB chunks
+                  for (let i = 0; i < bytes.length; i += chunkSize) {
+                    const chunk = bytes.slice(i, i + chunkSize)
+                    base64 += String.fromCharCode.apply(null, Array.from(chunk))
+                  }
+                  base64 = btoa(base64)
+
+                  // Determine media type
+                  let mediaType = 'application/octet-stream'
+                  if (isPdf) mediaType = 'application/pdf'
+                  else if (isDocx) mediaType = filename?.endsWith('.doc') ? 'application/msword' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                  else if (isSpreadsheet) {
+                    if (filename?.endsWith('.csv')) mediaType = 'text/csv'
+                    else if (filename?.endsWith('.xls')) mediaType = 'application/vnd.ms-excel'
+                    else mediaType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                  }
+                  else if (isPpt) {
+                    if (filename?.endsWith('.ppt')) mediaType = 'application/vnd.ms-powerpoint'
+                    else mediaType = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+                  }
+
+                  console.log('Private thread - extracting text from document:', filename, 'mediaType:', mediaType)
+
+                  const response = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'x-api-key': apiKey,
+                      'anthropic-version': '2023-06-01',
+                    },
+                    body: JSON.stringify({
+                      model: 'claude-sonnet-4-20250514',
+                      max_tokens: 8192,
+                      messages: [{
+                        role: 'user',
+                        content: [
+                          {
+                            type: 'document',
+                            source: {
+                              type: 'base64',
+                              media_type: mediaType,
+                              data: base64,
+                            },
+                          },
+                          {
+                            type: 'text',
+                            text: 'Please extract ALL the text content from this document. Include everything - headings, body text, lists, tables. Format it clearly with markdown.',
+                          },
+                        ],
+                      }],
+                    }),
+                  })
+
+                  if (response.ok) {
+                    const data = await response.json() as { content: Array<{ type: string; text: string }> }
+                    content = data.content[0]?.text || null
+
+                    // Cache extracted content for future use
+                    if (content) {
+                      await c.env.DB.prepare('UPDATE documents SET content_text = ? WHERE id = ?')
+                        .bind(content.slice(0, 50000), documentId)
+                        .run()
+                      console.log('Private thread - cached extracted content, length:', content.length)
+                    }
+                  } else {
+                    console.error('Private thread - Claude extraction failed:', await response.text())
+                  }
+                }
+              } else {
+                // Plain text file - read directly
+                const text = await object.text()
+                if (text && !text.includes('\0') && text.length < 100000) {
+                  content = text
+                  await c.env.DB.prepare('UPDATE documents SET content_text = ? WHERE id = ?')
+                    .bind(content.slice(0, 50000), documentId)
+                    .run()
+                }
               }
             }
           } catch (e) {
@@ -991,6 +1148,9 @@ brain.post('/private-thread/:groupId', async (c) => {
 
         if (content) {
           documentContext = `\n\nDOCUMENT CONTENT ("${doc.filename}"):\n--- START OF DOCUMENT ---\n${content.slice(0, 50000)}\n--- END OF DOCUMENT ---\n\nThe user is asking about this document.`
+        } else {
+          // No content available - let Brain know
+          documentContext = `\n\nNOTE: The document "${doc.filename}" was uploaded but I couldn't extract its text content. The user may need to re-share it or upload a text version.`
         }
       }
     }

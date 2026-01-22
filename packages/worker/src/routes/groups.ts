@@ -434,4 +434,239 @@ groups.get('/:id/members', async (c) => {
   }
 })
 
+// Invite a user to a channel (admin or member can invite)
+groups.post('/:id/invite', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  const groupId = c.req.param('id')
+
+  try {
+    // Check if user is a member of this channel
+    const membership = await c.env.DB.prepare(
+      'SELECT role FROM group_members WHERE group_id = ? AND user_id = ?'
+    )
+      .bind(groupId, user.id)
+      .first()
+
+    if (!membership) {
+      return c.json({ message: 'Not a member of this channel' }, 403)
+    }
+
+    const { userId, email } = await c.req.json<{ userId?: string; email?: string }>()
+
+    if (!userId && !email) {
+      return c.json({ message: 'userId or email is required' }, 400)
+    }
+
+    // Find the user to invite
+    let inviteeId = userId
+    if (!inviteeId && email) {
+      const invitee = await c.env.DB.prepare(
+        'SELECT id FROM users WHERE email = ? AND workspace_id = ?'
+      )
+        .bind(email.toLowerCase(), user.workspace_id)
+        .first()
+
+      if (!invitee) {
+        return c.json({ message: 'User not found in this workspace' }, 404)
+      }
+      inviteeId = invitee.id as string
+    }
+
+    // Check if user is in the same workspace
+    const inviteeUser = await c.env.DB.prepare(
+      'SELECT id, name, email, workspace_id FROM users WHERE id = ?'
+    )
+      .bind(inviteeId)
+      .first()
+
+    if (!inviteeUser) {
+      return c.json({ message: 'User not found' }, 404)
+    }
+
+    if (inviteeUser.workspace_id !== user.workspace_id) {
+      return c.json({ message: 'User is not in your workspace' }, 403)
+    }
+
+    // Check if already a member
+    const existing = await c.env.DB.prepare(
+      'SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?'
+    )
+      .bind(groupId, inviteeId)
+      .first()
+
+    if (existing) {
+      return c.json({ message: 'User is already a member' }, 400)
+    }
+
+    // Add as member
+    await c.env.DB.prepare(
+      'INSERT INTO group_members (group_id, user_id, role) VALUES (?, ?, ?)'
+    )
+      .bind(groupId, inviteeId, 'member')
+      .run()
+
+    // Get group name for the notification
+    const groupRow = await c.env.DB.prepare('SELECT name FROM groups WHERE id = ?')
+      .bind(groupId)
+      .first()
+    const groupName = groupRow?.name as string || 'a channel'
+
+    // Create a system message notifying everyone about the new member
+    const systemMessageId = crypto.randomUUID()
+    await c.env.DB.prepare(`
+      INSERT INTO messages (id, group_id, user_id, type, content, created_at)
+      VALUES (?, ?, ?, 'system', ?, ?)
+    `)
+      .bind(
+        systemMessageId,
+        groupId,
+        user.id,
+        `${user.name} added ${inviteeUser.name} to the channel`,
+        new Date().toISOString()
+      )
+      .run()
+
+    // Broadcast the new member addition via WebSocket (Durable Object)
+    try {
+      const roomId = c.env.CHAT_ROOMS.idFromName(groupId)
+      const room = c.env.CHAT_ROOMS.get(roomId)
+
+      // Send a member_added event to all connected clients
+      await room.fetch(new Request('http://internal/broadcast', {
+        method: 'POST',
+        body: JSON.stringify({
+          type: 'member_added',
+          groupId,
+          groupName,
+          member: {
+            user_id: inviteeId,
+            name: inviteeUser.name,
+            email: inviteeUser.email,
+            role: 'member',
+          },
+          addedBy: {
+            id: user.id,
+            name: user.name,
+          },
+          systemMessage: {
+            id: systemMessageId,
+            group_id: groupId,
+            user_id: user.id,
+            type: 'system',
+            content: `${user.name} added ${inviteeUser.name} to the channel`,
+            created_at: new Date().toISOString(),
+          },
+        }),
+      }))
+    } catch (wsError) {
+      console.error('Failed to broadcast member addition:', wsError)
+      // Continue even if broadcast fails
+    }
+
+    return c.json({
+      success: true,
+      member: {
+        user_id: inviteeId,
+        name: inviteeUser.name,
+        email: inviteeUser.email,
+        role: 'member',
+      },
+      groupName,
+    })
+  } catch (error) {
+    console.error('Invite user error:', error)
+    return c.json({ message: 'Failed to invite user' }, 500)
+  }
+})
+
+// Remove a member from a channel (admin only, or self)
+groups.delete('/:id/members/:userId', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  const groupId = c.req.param('id')
+  const targetUserId = c.req.param('userId')
+
+  try {
+    // Check if user is a member of this channel
+    const membership = await c.env.DB.prepare(
+      'SELECT role FROM group_members WHERE group_id = ? AND user_id = ?'
+    )
+      .bind(groupId, user.id)
+      .first()
+
+    if (!membership) {
+      return c.json({ message: 'Not a member of this channel' }, 403)
+    }
+
+    // Users can remove themselves, or admins can remove anyone
+    const isAdmin = membership.role === 'admin'
+    const isSelf = targetUserId === user.id
+
+    if (!isAdmin && !isSelf) {
+      return c.json({ message: 'Only admins can remove other members' }, 403)
+    }
+
+    // Remove from channel
+    await c.env.DB.prepare(
+      'DELETE FROM group_members WHERE group_id = ? AND user_id = ?'
+    )
+      .bind(groupId, targetUserId)
+      .run()
+
+    return c.json({ success: true })
+  } catch (error) {
+    console.error('Remove member error:', error)
+    return c.json({ message: 'Failed to remove member' }, 500)
+  }
+})
+
+// List workspace users (for invite UI)
+groups.get('/:id/workspace-users', async (c) => {
+  const user = await getUser(c)
+  if (!user) return c.json({ message: 'Unauthorized' }, 401)
+
+  const groupId = c.req.param('id')
+
+  try {
+    // Check if user is a member of this channel
+    const membership = await c.env.DB.prepare(
+      'SELECT 1 FROM group_members WHERE group_id = ? AND user_id = ?'
+    )
+      .bind(groupId, user.id)
+      .first()
+
+    if (!membership) {
+      return c.json({ message: 'Not a member of this channel' }, 403)
+    }
+
+    // Get all workspace users who are NOT already members
+    const rows = await c.env.DB.prepare(`
+      SELECT u.id, u.name, u.email, u.avatar_url
+      FROM users u
+      WHERE u.workspace_id = ?
+        AND u.id NOT IN (
+          SELECT user_id FROM group_members WHERE group_id = ?
+        )
+      ORDER BY u.name
+    `)
+      .bind(user.workspace_id, groupId)
+      .all()
+
+    const users = (rows.results || []).map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      avatar_url: row.avatar_url || undefined,
+    }))
+
+    return c.json({ users })
+  } catch (error) {
+    console.error('List workspace users error:', error)
+    return c.json({ message: 'Failed to list users' }, 500)
+  }
+})
+
 export default groups

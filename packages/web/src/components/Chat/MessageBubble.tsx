@@ -1,15 +1,36 @@
 import { useState } from 'react'
+import { useDrag } from 'react-dnd'
+import { DragTypes, MessageDragItem } from '../ui/DragDropContext'
 import type { Message } from '../../types'
 
 interface MessageBubbleProps {
   message: Message
   isMe: boolean
-  onTap: () => void
+  authorName?: string
   onDelete?: () => void
+  onOpenLink?: (url: string) => void
 }
 
-export default function MessageBubble({ message, isMe, onTap, onDelete }: MessageBubbleProps) {
+// URL detection regex
+const URL_REGEX = /(https?:\/\/[^\s<]+[^<.,:;"')\]\s])/g
+
+// Minimal Slack-style message bubble - just text, draggable
+export default function MessageBubble({ message, isMe, authorName, onDelete, onOpenLink }: MessageBubbleProps) {
   const [showMenu, setShowMenu] = useState(false)
+
+  // Make message draggable
+  const [{ isDragging }, drag] = useDrag<MessageDragItem, void, { isDragging: boolean }>(() => ({
+    type: DragTypes.MESSAGE_TEXT,
+    item: {
+      type: DragTypes.MESSAGE_TEXT,
+      content: message.content,
+      messageId: message.id,
+      authorName: authorName,
+    },
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  }), [message, authorName])
 
   const handleContextMenu = (e: React.MouseEvent) => {
     if (isMe && onDelete) {
@@ -18,16 +39,46 @@ export default function MessageBubble({ message, isMe, onTap, onDelete }: Messag
     }
   }
 
+  const handleLinkClick = (e: React.MouseEvent, url: string) => {
+    e.stopPropagation()
+    if (onOpenLink) {
+      onOpenLink(url)
+    } else {
+      window.open(url, '_blank')
+    }
+  }
+
+  // Render content with clickable links
+  const renderContent = (text: string) => {
+    const parts = text.split(URL_REGEX)
+    return parts.map((part, i) => {
+      if (part.match(URL_REGEX)) {
+        return (
+          <button
+            key={i}
+            onClick={(e) => handleLinkClick(e, part)}
+            className="text-cyan-300 hover:text-cyan-200 underline break-all"
+          >
+            {part}
+          </button>
+        )
+      }
+      return <span key={i}>{part}</span>
+    })
+  }
+
   return (
     <div className="relative group">
       <div
-        className={`rounded-2xl px-4 py-2.5 max-w-xs cursor-pointer ${
+        ref={drag}
+        className={`rounded-2xl px-4 py-2.5 max-w-md ${
           isMe ? 'bg-cyan-600 rounded-br-sm' : 'bg-zinc-900 rounded-bl-sm'
-        }`}
-        onClick={onTap}
+        } ${isDragging ? 'opacity-50' : ''}`}
         onContextMenu={handleContextMenu}
       >
-        <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+        <p className="text-sm whitespace-pre-wrap break-words">
+          {renderContent(message.content)}
+        </p>
         {message.reactions && message.reactions.length > 0 && (
           <div className="flex gap-0.5 mt-1.5 -mb-1">
             {message.reactions.map((r, j) => (
@@ -37,6 +88,13 @@ export default function MessageBubble({ message, isMe, onTap, onDelete }: Messag
             ))}
           </div>
         )}
+      </div>
+
+      {/* Drag indicator on hover */}
+      <div className={`absolute top-1/2 -translate-y-1/2 ${isMe ? '-left-6' : '-right-6'} text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity`}>
+        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M8 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM8 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM8 18a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM20 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM20 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM20 18a2 2 0 1 1-4 0 2 2 0 0 1 4 0z" />
+        </svg>
       </div>
 
       {/* Delete button on hover for own messages */}

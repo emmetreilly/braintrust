@@ -30,7 +30,17 @@
       "Bash(CLOUDFLARE_API_TOKEN=\"35mJt6ReV2HByTJDnh9jFts-_vGRaQ3qIx10HuKR\" CLOUDFLARE_ACCOUNT_ID=\"caaf4c66f911a93355bb85a73596021f\" npx wrangler d1 execute brain-trust-db --remote --command \"DELETE FROM messages WHERE user_id = ''2a441758-48f2-49dc-a0e7-6d424a686428''; DELETE FROM groups WHERE created_by = ''2a441758-48f2-49dc-a0e7-6d424a686428'';\")",
       "Bash(CLOUDFLARE_API_TOKEN=\"35mJt6ReV2HByTJDnh9jFts-_vGRaQ3qIx10HuKR\" CLOUDFLARE_ACCOUNT_ID=\"caaf4c66f911a93355bb85a73596021f\" npx wrangler d1 execute brain-trust-db --remote --command \"SELECT * FROM users LIMIT 5;\")",
       "Bash(CLOUDFLARE_API_TOKEN=\"35mJt6ReV2HByTJDnh9jFts-_vGRaQ3qIx10HuKR\" CLOUDFLARE_ACCOUNT_ID=\"caaf4c66f911a93355bb85a73596021f\" npx wrangler d1 execute brain-trust-db --remote --command \"DELETE FROM users WHERE email = ''test@kartel.ai'';\")",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(cd /Users/emmetreilly/Desktop/brain\\\\ trust\\\\ app/packages/web && timeout 30 npx tsc --noEmit --skipLibCheck:*)",
+      "Bash(npm run deploy:*)",
+      "Bash(npm install:*)",
+      "Bash(npm ls react-resizable-panels)",
+      "Bash(npx tsc:*)",
+      "Bash(pkill:*)",
+      "Bash(npm run dev:*)",
+      "Bash(lsof:*)"
     ]
   }
 }

@@ -5,6 +5,7 @@ import Login from './pages/Login'
 import Groups from './pages/Groups'
 import Chat from './pages/Chat'
 import Settings from './pages/Settings'
+import Search from './pages/Search'
 
 function LoadingScreen() {
   return (
@@ -75,6 +76,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Settings />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/search"
+          element={
+            <ProtectedRoute>
+              <Search />
             </ProtectedRoute>
           }
         />

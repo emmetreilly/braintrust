@@ -56,6 +56,7 @@ export type AIProvider = 'claude' | 'openai' | 'gemini'
 export interface GroupMember {
   user_id: string
   group_id: string
+  role: string
   joined_at: string
   user: User
 }
@@ -64,7 +65,7 @@ export interface Message {
   id: string
   group_id: string
   user_id: string
-  type: 'text' | 'brain_response' | 'media' | 'brain_insight'
+  type: 'text' | 'brain_response' | 'media' | 'brain_insight' | 'system'
   content: string
   media_data?: string
   visible_to?: string // If set, only visible to this user until shared
@@ -109,13 +110,27 @@ export interface MediaData {
 }
 
 export interface WebSocketMessage {
-  type: 'message' | 'presence' | 'reaction' | 'typing'
+  type: 'message' | 'presence' | 'reaction' | 'typing' | 'member_added'
   message?: Message
   action?: 'joined' | 'left'
   userId?: string
   online?: string[]
   messageId?: string
   reaction?: Reaction
+  // member_added event fields
+  groupId?: string
+  groupName?: string
+  member?: {
+    user_id: string
+    name: string
+    email: string
+    role: string
+  }
+  addedBy?: {
+    id: string
+    name: string
+  }
+  systemMessage?: Message
 }
 
 export interface ClaudeDocument {

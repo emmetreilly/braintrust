@@ -369,16 +369,23 @@ export async function catchUp(
     .join('\n')
     .slice(0, 8000)
 
-  const systemPrompt = `You are Brain, catching up a group member on what they missed.
+  const systemPrompt = `You are catching up a team member on what they missed. Be direct and concise.
 
-Write a casual, friendly summary of what happened while they were away.
-- Be conversational, like you're chatting with a friend
-- Highlight interesting discussions, jokes, or important things
-- Mention specific people and what they said when relevant
-- Keep it brief but informative
-- Use the group member's name naturally
+Format your response as:
 
-Don't use bullet points - write it as natural conversation.`
+**Summary**
+1-2 sentences on what the team discussed.
+
+**Documents shared**
+List any files/docs that were shared and what they contain.
+
+**Key decisions or info**
+Bullet the important things they need to know.
+
+**Next steps**
+Any action items or things to follow up on.
+
+Keep it short. No filler words. Skip any section if nothing relevant.`
 
   const response = await callAI(
     options?.provider || 'claude',
@@ -426,7 +433,7 @@ export async function storeSummary(
  * Format summary for display
  */
 export function formatSummary(summary: ConversationSummary): string {
-  let formatted = `📝 **Summary** (${summary.messageCount} messages)\n\n`
+  let formatted = `**Summary** (${summary.messageCount} messages)\n\n`
   formatted += summary.summary + '\n\n'
 
   if (summary.keyTopics.length > 0) {
@@ -436,14 +443,7 @@ export function formatSummary(summary: ConversationSummary): string {
   if (summary.highlights.length > 0) {
     formatted += '**Highlights:**\n'
     for (const highlight of summary.highlights) {
-      const emoji = {
-        discussion: '💬',
-        decision: '✅',
-        question: '❓',
-        recommendation: '💡',
-        funny: '😄',
-      }[highlight.type] || '📌'
-      formatted += `${emoji} ${highlight.content}\n`
+      formatted += `- ${highlight.content}\n`
     }
   }
 

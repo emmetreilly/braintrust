@@ -12,8 +12,12 @@ export function useWebSocket(groupId: string, userId: string) {
     if (!groupId || !userId) return
 
     const connect = () => {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const wsUrl = `${protocol}//${window.location.host}/api/ws/${groupId}?userId=${userId}`
+      // Use the worker URL for WebSocket in production
+      const isProduction = window.location.hostname.includes('pages.dev') || window.location.hostname.includes('brain-trust')
+      const workerHost = 'brain-trust-worker.e-caa.workers.dev'
+      const host = isProduction ? workerHost : window.location.host
+      const protocol = isProduction ? 'wss:' : (window.location.protocol === 'https:' ? 'wss:' : 'ws:')
+      const wsUrl = `${protocol}//${host}/api/ws/${groupId}?userId=${userId}`
 
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws

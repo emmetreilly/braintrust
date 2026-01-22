@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { useDrag } from 'react-dnd'
 import type { Message } from '../../types'
 import { brain as brainApi } from '../../lib/api'
+import { DragTypes } from '../ui/DragDropContext'
 
 interface BrainResponseProps {
   message: Message
@@ -8,20 +10,30 @@ interface BrainResponseProps {
   onShare?: (sharedMessage: Message) => void
 }
 
-export default function BrainResponse({ message, onTap, onShare }: BrainResponseProps) {
+// Minimal Brain response - just text, Slack-style
+// Draggable to share
+export default function BrainResponse({ message, onShare }: BrainResponseProps) {
   const [isSharing, setIsSharing] = useState(false)
   const isPrivate = !!message.visible_to
 
-  const handleShare = async (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (isSharing) return
+  // Make draggable to share in chat
+  const [{ isDragging }, drag] = useDrag(() => ({
+    type: DragTypes.BRAIN_RESPONSE,
+    item: {
+      type: DragTypes.BRAIN_RESPONSE,
+      content: message.content,
+    },
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  }), [message.content])
 
+  const handleShare = async () => {
+    if (isSharing) return
     setIsSharing(true)
     try {
       const result = await brainApi.shareMessage(message.id)
-      if (onShare) {
-        onShare(result.message)
-      }
+      if (onShare) onShare(result.message)
     } catch (err) {
       console.error('Failed to share message:', err)
     } finally {
@@ -31,33 +43,22 @@ export default function BrainResponse({ message, onTap, onShare }: BrainResponse
 
   return (
     <div
-      className={`rounded-2xl px-4 py-3 rounded-bl-sm max-w-xs cursor-pointer ${
-        isPrivate
-          ? 'bg-zinc-900/60 border border-dashed border-zinc-700'
-          : 'bg-zinc-900 border border-zinc-800'
-      }`}
-      onClick={onTap}
+      ref={drag}
+      className={`${isDragging ? 'opacity-50' : ''}`}
     >
+      {/* Just the content */}
+      <p className="text-sm whitespace-pre-line">{message.content}</p>
+
+      {/* Private indicator - minimal */}
       {isPrivate && (
-        <div className="text-xs text-zinc-500 italic mb-2 flex items-center gap-1">
-          <span className="opacity-60">👁</span> Only visible to you
-        </div>
+        <button
+          onClick={handleShare}
+          disabled={isSharing}
+          className="text-xs text-zinc-500 hover:text-cyan-400 mt-1"
+        >
+          {isSharing ? 'sharing...' : 'only you · share'}
+        </button>
       )}
-      <p className={`text-sm whitespace-pre-line ${isPrivate ? 'text-zinc-300' : ''}`}>{message.content}</p>
-      <div className="mt-2 flex items-center justify-between">
-        <div className="text-xs text-zinc-600 flex items-center gap-1">
-          <span>💭</span> Tap to go deeper
-        </div>
-        {isPrivate && (
-          <button
-            onClick={handleShare}
-            disabled={isSharing}
-            className="text-xs text-cyan-500 hover:text-cyan-400 px-2 py-1 rounded hover:bg-cyan-500/10 transition-colors disabled:opacity-50"
-          >
-            {isSharing ? 'Sharing...' : 'Share with group'}
-          </button>
-        )}
-      </div>
     </div>
   )
 }

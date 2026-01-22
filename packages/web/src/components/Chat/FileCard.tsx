@@ -1,4 +1,7 @@
+import { useState } from 'react'
+import { useDrag } from 'react-dnd'
 import { files as filesApi } from '../../lib/api'
+import { DragTypes } from '../ui/DragDropContext'
 import type { Document } from '../../types'
 
 interface FileCardProps {
@@ -6,24 +9,38 @@ interface FileCardProps {
   onView?: () => void
 }
 
-// File type icons and colors
-const FILE_ICONS: Record<string, { icon: string; color: string }> = {
-  pdf: { icon: '📄', color: 'text-red-400' },
-  doc: { icon: '📝', color: 'text-blue-400' },
-  docx: { icon: '📝', color: 'text-blue-400' },
-  xls: { icon: '📊', color: 'text-green-400' },
-  xlsx: { icon: '📊', color: 'text-green-400' },
-  csv: { icon: '📊', color: 'text-green-400' },
-  ppt: { icon: '📽️', color: 'text-orange-400' },
-  pptx: { icon: '📽️', color: 'text-orange-400' },
-  txt: { icon: '📃', color: 'text-zinc-400' },
-  md: { icon: '📃', color: 'text-zinc-400' },
-  json: { icon: '{ }', color: 'text-yellow-400' },
-  png: { icon: '🖼️', color: 'text-purple-400' },
-  jpg: { icon: '🖼️', color: 'text-purple-400' },
-  jpeg: { icon: '🖼️', color: 'text-purple-400' },
-  gif: { icon: '🖼️', color: 'text-purple-400' },
-  default: { icon: '📎', color: 'text-zinc-400' },
+// File type icons and colors - using SVG icons instead of emojis
+const FILE_ICONS: Record<string, { icon: string; color: string; bg: string }> = {
+  pdf: { icon: 'pdf', color: 'text-red-400', bg: 'bg-red-500/10' },
+  doc: { icon: 'doc', color: 'text-blue-400', bg: 'bg-blue-500/10' },
+  docx: { icon: 'doc', color: 'text-blue-400', bg: 'bg-blue-500/10' },
+  xls: { icon: 'xls', color: 'text-green-400', bg: 'bg-green-500/10' },
+  xlsx: { icon: 'xls', color: 'text-green-400', bg: 'bg-green-500/10' },
+  csv: { icon: 'csv', color: 'text-green-400', bg: 'bg-green-500/10' },
+  ppt: { icon: 'ppt', color: 'text-orange-400', bg: 'bg-orange-500/10' },
+  pptx: { icon: 'ppt', color: 'text-orange-400', bg: 'bg-orange-500/10' },
+  txt: { icon: 'txt', color: 'text-zinc-400', bg: 'bg-zinc-500/10' },
+  md: { icon: 'md', color: 'text-zinc-400', bg: 'bg-zinc-500/10' },
+  json: { icon: 'json', color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
+  png: { icon: 'img', color: 'text-purple-400', bg: 'bg-purple-500/10' },
+  jpg: { icon: 'img', color: 'text-purple-400', bg: 'bg-purple-500/10' },
+  jpeg: { icon: 'img', color: 'text-purple-400', bg: 'bg-purple-500/10' },
+  gif: { icon: 'img', color: 'text-purple-400', bg: 'bg-purple-500/10' },
+  default: { icon: 'file', color: 'text-zinc-400', bg: 'bg-zinc-500/10' },
+}
+
+// Simple file icon component
+function FileIcon({ type, className }: { type: string; className?: string }) {
+  return (
+    <svg className={className || 'w-4 h-4'} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+      {type !== 'file' && (
+        <text x="12" y="16" textAnchor="middle" fontSize="6" fill="currentColor" stroke="none" className="font-mono uppercase">
+          {type.slice(0, 3)}
+        </text>
+      )}
+    </svg>
+  )
 }
 
 function getFileInfo(filename: string) {
@@ -70,18 +87,18 @@ export default function FileCard({ document, onView }: FileCardProps) {
 
       <div className="p-3">
         <div className="flex items-start gap-3">
-          <div className={`text-2xl ${color}`}>{icon}</div>
+          <FileIcon type={icon} className={`w-6 h-6 ${color}`} />
           <div className="flex-1 min-w-0">
             <p className="font-medium text-sm truncate" title={document.filename}>
               {document.filename}
             </p>
             <div className="flex items-center gap-2 text-xs text-zinc-500 mt-0.5">
               <span>{formatFileSize(document.file_size)}</span>
-              <span>·</span>
+              <span>-</span>
               <span>{document.file_type.toUpperCase()}</span>
               {document.has_embedding && (
                 <>
-                  <span>·</span>
+                  <span>-</span>
                   <span className="text-cyan-500">Indexed</span>
                 </>
               )}
@@ -122,8 +139,83 @@ export default function FileCard({ document, onView }: FileCardProps) {
   )
 }
 
-// Simpler inline version for message list
-export function FileCardInline({ filename, fileSize, fileType, documentId, summary, onAskBrain }: {
+// Minimal file share line for chat messages - single line, no borders
+// Drag to Brain to ask questions, click to expand
+export function FileShareLine({
+  filename,
+  sharedBy,
+  documentId,
+  summary,
+}: {
+  filename: string
+  sharedBy?: string
+  documentId?: string
+  summary?: string | null
+}) {
+  const [isExpanded, setIsExpanded] = useState(false)
+  const { icon, color } = getFileInfo(filename)
+
+  // Make draggable to Brain
+  const [{ isDragging }, drag] = useDrag(() => ({
+    type: DragTypes.MEDIA_FILE,
+    item: {
+      type: DragTypes.MEDIA_FILE,
+      fileId: documentId || '',
+      filename: filename,
+      fileType: filename.split('.').pop() || 'file',
+    },
+    collect: (monitor) => ({
+      isDragging: monitor.isDragging(),
+    }),
+  }), [documentId, filename])
+
+  return (
+    <div
+      ref={drag}
+      className={`${isDragging ? 'opacity-50' : ''}`}
+    >
+      {/* Minimal single line */}
+      <div
+        className="flex items-center gap-2 py-1 cursor-pointer group"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <FileIcon type={icon} className={`w-4 h-4 ${color} flex-shrink-0`} />
+        <span className="text-sm truncate">{filename}</span>
+        {sharedBy && (
+          <span className="text-xs text-zinc-500 flex-shrink-0">- shared by {sharedBy}</span>
+        )}
+        {documentId && (
+          <a
+            href={filesApi.download(documentId)}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="ml-auto opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-white transition-opacity"
+            title="Download"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+          </a>
+        )}
+      </div>
+
+      {/* Expanded view - inline, shows summary if available */}
+      {isExpanded && summary && (
+        <div className="ml-6 mt-2 mb-2 text-sm text-zinc-400 border-l-2 border-zinc-700 pl-3">
+          <p>{summary}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Legacy export for backwards compatibility
+export function FileCardInline({
+  filename,
+  documentId,
+  summary,
+}: {
   filename: string
   fileSize?: number
   fileType?: string
@@ -131,52 +223,11 @@ export function FileCardInline({ filename, fileSize, fileType, documentId, summa
   summary?: string | null
   onAskBrain?: () => void
 }) {
-  const { icon, color } = getFileInfo(filename)
-
   return (
-    <div className="bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden max-w-md">
-      <div className="p-3 flex items-center gap-3">
-        <div className={`text-xl ${color}`}>{icon}</div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">{filename}</p>
-          <div className="text-xs text-zinc-500">
-            {fileSize && <span>{formatFileSize(fileSize)}</span>}
-            {fileType && <span> · {fileType.toUpperCase()}</span>}
-          </div>
-        </div>
-        <div className="flex items-center gap-1">
-          {onAskBrain && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onAskBrain() }}
-              className="p-1.5 hover:bg-cyan-500/20 rounded text-cyan-500 hover:text-cyan-400 transition-colors"
-              title="Ask Brain about this document"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </button>
-          )}
-          {documentId && (
-            <a
-              href={filesApi.download(documentId)}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="p-1.5 hover:bg-zinc-800 rounded text-zinc-400 hover:text-white"
-              title="Download"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-            </a>
-          )}
-        </div>
-      </div>
-      {summary && (
-        <div className="px-3 pb-3 pt-0">
-          <p className="text-xs text-zinc-400 line-clamp-3">{summary}</p>
-        </div>
-      )}
-    </div>
+    <FileShareLine
+      filename={filename}
+      documentId={documentId}
+      summary={summary}
+    />
   )
 }

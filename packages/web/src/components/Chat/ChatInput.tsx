@@ -14,6 +14,7 @@ interface ChatInputProps {
   onFileUpload: (file: File) => void
   isUploading?: boolean
   groupId?: string
+  onDragStateChange?: (isDragging: boolean) => void
 }
 
 export default function ChatInput({
@@ -23,12 +24,14 @@ export default function ChatInput({
   onFileUpload,
   isUploading,
   groupId,
+  onDragStateChange,
 }: ChatInputProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textInputRef = useRef<HTMLInputElement>(null)
   const [showFilePicker, setShowFilePicker] = useState(false)
   const [fileQuery, setFileQuery] = useState('')
   const [attachedFile, setAttachedFile] = useState<AttachedFile | null>(null)
+  const [isDragging, setIsDragging] = useState(false)
 
   // Detect @ trigger in input - show file picker when typing @ (but not @brain)
   useEffect(() => {
@@ -95,8 +98,59 @@ export default function ChatInput({
     setAttachedFile(null)
   }
 
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!isDragging) {
+      setIsDragging(true)
+      onDragStateChange?.(true)
+    }
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    // Only set to false if we're leaving the entire component
+    const rect = e.currentTarget.getBoundingClientRect()
+    const x = e.clientX
+    const y = e.clientY
+    if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+      setIsDragging(false)
+      onDragStateChange?.(false)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+    onDragStateChange?.(false)
+
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length > 0) {
+      // Upload each file
+      files.forEach(file => onFileUpload(file))
+    }
+  }
+
   return (
-    <div className="p-4 border-t border-zinc-800 relative">
+    <div
+      className={`p-4 border-t border-zinc-800 relative transition-colors ${isDragging ? 'bg-cyan-500/10 border-cyan-500' : ''}`}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* Drag overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 flex items-center justify-center bg-cyan-500/10 border-2 border-dashed border-cyan-500 rounded-lg z-10 pointer-events-none">
+          <div className="text-center">
+            <span className="text-2xl">📄</span>
+            <p className="text-cyan-400 text-sm font-medium mt-1">Drop to share</p>
+          </div>
+        </div>
+      )}
+
       {/* Attached file indicator */}
       {attachedFile && (
         <div className="mb-2 flex items-center gap-2">

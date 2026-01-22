@@ -24,6 +24,18 @@ export class ChatRoom {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url)
 
+    // Handle internal broadcast from other workers (for notifications)
+    if (url.pathname === '/broadcast' && request.method === 'POST') {
+      try {
+        const data = await request.json() as WebSocketMessage
+        this.broadcast(data)
+        return new Response('OK', { status: 200 })
+      } catch (e) {
+        console.error('Broadcast error:', e)
+        return new Response('Broadcast failed', { status: 500 })
+      }
+    }
+
     // Handle WebSocket upgrade
     if (request.headers.get('Upgrade') === 'websocket') {
       const pair = new WebSocketPair()

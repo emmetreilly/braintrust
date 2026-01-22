@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { brain, messages as messagesApi } from '../../lib/api'
+import { useState, useEffect, useRef } from 'react'
+import { brain, messages as messagesApi, files as filesApi } from '../../lib/api'
 
 interface PrivateThreadProps {
   groupId: string
@@ -16,6 +16,11 @@ interface ThreadMessage {
   content: string
 }
 
+interface AttachedFile {
+  id: string
+  name: string
+}
+
 export default function PrivateThread({ groupId, context, documentId, documentName, onClose, onShareInsight }: PrivateThreadProps) {
   const [messages, setMessages] = useState<ThreadMessage[]>([])
   const [input, setInput] = useState('')
@@ -23,11 +28,54 @@ export default function PrivateThread({ groupId, context, documentId, documentNa
   const [isLoadingThread, setIsLoadingThread] = useState(true)
   const [selectedMessage, setSelectedMessage] = useState<number | null>(null)
   const [sharing, setSharing] = useState(false)
+  const [attachedFiles, setAttachedFiles] = useState<AttachedFile[]>([])
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Load existing thread on mount
+  // Load existing thread on mount, and extract document content if needed
   useEffect(() => {
     const loadThread = async () => {
       try {
+        // If we have a documentId, try to extract content first (in case it wasn't extracted on upload)
+        if (documentId) {
+          setMessages([{
+            role: 'brain',
+            content: `Loading "${documentName || 'document'}"...`,
+          }])
+
+          try {
+            const extractResult = await filesApi.extract(documentId)
+            console.log('Document extraction result:', extractResult)
+
+            if (extractResult.success || extractResult.content_text) {
+              // Content extracted or already exists
+              setMessages([{
+                role: 'brain',
+                content: `I've loaded "${documentName}". What would you like to know about it? You can ask me to summarize, find key points, or answer specific questions.`,
+              }])
+            } else if (extractResult.message?.includes('already has')) {
+              // Already extracted
+              setMessages([{
+                role: 'brain',
+                content: `I've loaded "${documentName}". What would you like to know about it? You can ask me to summarize, find key points, or answer specific questions.`,
+              }])
+            } else {
+              // Extraction failed - show error
+              setMessages([{
+                role: 'brain',
+                content: extractResult.message || `I couldn't read the content of "${documentName}". You may need to re-upload it or check that an API key is configured in Settings.`,
+              }])
+            }
+          } catch (extractErr) {
+            console.error('Document extraction error:', extractErr)
+            // Continue anyway - maybe content was already extracted
+            setMessages([{
+              role: 'brain',
+              content: `I've loaded "${documentName}". What would you like to know about it?`,
+            }])
+          }
+        }
+
         const { messages: savedMessages } = await brain.getPrivateThread(groupId, documentId)
 
         if (savedMessages && savedMessages.length > 0) {
@@ -39,13 +87,13 @@ export default function PrivateThread({ groupId, context, documentId, documentNa
           })))
           setIsLoadingThread(false)
         } else {
-          // New thread - show welcome and auto-send context if provided
-          setMessages([{
-            role: 'brain',
-            content: documentName
-              ? `I've loaded "${documentName}". What would you like to know about it? You can ask me to summarize, find key points, or answer specific questions.`
-              : "Private thread — only you can see this. I can go deeper on anything, fact-check, help draft a reply, or find related stuff.",
-          }])
+          // New thread - show welcome (already set above if documentId exists)
+          if (!documentId) {
+            setMessages([{
+              role: 'brain',
+              content: "Private thread — only you can see this. I can go deeper on anything, fact-check, help draft a reply, or find related stuff.",
+            }])
+          }
           setIsLoadingThread(false)
 
           // If context was provided (user typed a question before opening thread), auto-send it
@@ -77,17 +125,31 @@ export default function PrivateThread({ groupId, context, documentId, documentNa
 
     const userMessage: ThreadMessage = { role: 'user', content: input }
     setMessages((prev) => [...prev, userMessage])
+    const messageContent = input
     setInput('')
     setIsLoading(true)
 
     try {
+      // Build context from attached files
+      let fileContext = context || undefined
+      if (attachedFiles.length > 0) {
+        const fileNames = attachedFiles.map(f => f.name).join(', ')
+        fileContext = `[User has uploaded files for context: ${fileNames}. Include their content when answering.] ${fileContext || ''}`
+      }
+
+      // Use the first attached file as the document context if no document is already set
+      const effectiveDocId = documentId || (attachedFiles.length > 0 ? attachedFiles[0].id : undefined)
+      const effectiveDocName = documentName || (attachedFiles.length > 0 ? attachedFiles[0].name : undefined)
+
+      console.log('PrivateThread sending - documentId:', documentId, 'effectiveDocId:', effectiveDocId, 'effectiveDocName:', effectiveDocName)
+
       // Use persistent thread API
       const { userMessage: savedUserMsg, brainMessage } = await brain.sendPrivateMessage(
         groupId,
-        input,
-        documentId,
-        documentName,
-        context || undefined
+        messageContent,
+        effectiveDocId,
+        effectiveDocName,
+        fileContext
       )
 
       // Update with actual saved messages (with IDs)
@@ -122,10 +184,8 @@ export default function PrivateThread({ groupId, context, documentId, documentNa
 
     setSharing(true)
     try {
-      // Create an insight message in the group chat
-      const insightContent = documentName
-        ? `🧠 **Brain insight about "${documentName}":**\n\n${message.content}`
-        : `🧠 **Brain insight:**\n\n${message.content}`
+      // Create an insight message in the group chat - just the content
+      const insightContent = message.content
 
       // Include documentId in media_data so others can continue the conversation about this document
       const mediaData = documentId
@@ -162,8 +222,53 @@ export default function PrivateThread({ groupId, context, documentId, documentNa
     }
   }
 
+  const handleFileUpload = async (fileList: FileList) => {
+    if (fileList.length === 0) return
+
+    setUploading(true)
+    const uploadedFiles: AttachedFile[] = []
+
+    for (const file of Array.from(fileList)) {
+      try {
+        // Upload the file
+        const { document } = await filesApi.upload(file)
+
+        // Share to the group (triggers text extraction)
+        await filesApi.shareToGroup(document.id, groupId, false)
+
+        uploadedFiles.push({ id: document.id, name: document.filename })
+      } catch (err) {
+        console.error(`Failed to upload ${file.name}:`, err)
+      }
+    }
+
+    if (uploadedFiles.length > 0) {
+      setAttachedFiles(prev => [...prev, ...uploadedFiles])
+
+      // Add a system message showing what was uploaded
+      const fileNames = uploadedFiles.map(f => f.name).join(', ')
+      setMessages(prev => [...prev, {
+        role: 'brain',
+        content: `I've loaded ${uploadedFiles.length > 1 ? 'these files' : 'this file'}: ${fileNames}. You can ask me questions about ${uploadedFiles.length > 1 ? 'them' : 'it'} now.`,
+      }])
+    }
+
+    setUploading(false)
+  }
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleFileUpload(e.target.files)
+      e.target.value = ''
+    }
+  }
+
+  const removeAttachedFile = (fileId: string) => {
+    setAttachedFiles(prev => prev.filter(f => f.id !== fileId))
+  }
+
   return (
-    <div className="bg-zinc-950 min-h-screen text-white max-w-md mx-auto flex flex-col">
+    <div className="bg-zinc-950 h-full text-white flex flex-col">
       {/* Header */}
       <div className="p-4 border-b border-zinc-800 flex items-center gap-3">
         <button
@@ -273,13 +378,64 @@ export default function PrivateThread({ groupId, context, documentId, documentNa
 
       {/* Input */}
       <div className="p-4 border-t border-zinc-800">
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.ppt,.pptx,.txt,.md"
+          onChange={handleFileInputChange}
+          className="hidden"
+        />
+
+        {/* Attached files preview */}
+        {attachedFiles.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {attachedFiles.map(file => (
+              <div
+                key={file.id}
+                className="flex items-center gap-2 bg-zinc-800 rounded-lg px-3 py-1.5 text-sm"
+              >
+                <span className="text-zinc-400">📄</span>
+                <span className="truncate max-w-32">{file.name}</span>
+                <button
+                  onClick={() => removeAttachedFile(file.id)}
+                  className="text-zinc-500 hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Uploading indicator */}
+        {uploading && (
+          <div className="flex items-center gap-2 mb-3 text-sm text-cyan-400">
+            <div className="flex gap-1">
+              <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-bounce" />
+              <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+              <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+            </div>
+            Uploading files...
+          </div>
+        )}
+
         <div className="flex gap-2">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="w-12 h-12 bg-zinc-800 text-zinc-400 hover:text-white rounded-full flex items-center justify-center text-xl disabled:opacity-50 hover:bg-zinc-700 transition-colors"
+            title="Attach files for context"
+          >
+            +
+          </button>
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={documentName ? `Ask about ${documentName}...` : 'Ask Brain privately...'}
+            placeholder={documentName ? `Ask about ${documentName}...` : attachedFiles.length > 0 ? 'Ask about these files...' : 'Ask Brain privately...'}
             className="flex-1 bg-zinc-900 rounded-full px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
           />
           <button
@@ -290,6 +446,13 @@ export default function PrivateThread({ groupId, context, documentId, documentNa
             ↑
           </button>
         </div>
+
+        {/* Hint about file uploads */}
+        {!documentName && attachedFiles.length === 0 && (
+          <p className="text-xs text-zinc-600 text-center mt-2">
+            Click + to add files for focused context
+          </p>
+        )}
       </div>
     </div>
   )
