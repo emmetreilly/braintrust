@@ -4,7 +4,8 @@ import { useAuthStore } from '../stores/auth'
 import { useChatStore } from '../stores/chat'
 import { ChatProvider, useChatContext } from '../components/Chat/ChatContext'
 import TabbedContentPanel from '../components/ui/TabbedContentPanel'
-import RightPanel from '../components/RightPanel/RightPanel'
+import AIWorkspacePanel from '../components/AIWorkspace/AIWorkspacePanel'
+import NotesPanel from '../components/RightPanel/NotesPanel'
 import ChannelSidebar from '../components/ChannelSidebar'
 import { DragDropProvider } from '../components/ui/DragDropContext'
 import { groups as groupsApi, files as filesApi } from '../lib/api'
@@ -85,22 +86,50 @@ function ChatContent() {
           <ChannelSidebar onCreateChannel={() => setShowCreateChannel(true)} />
         </div>
 
-        {/* Main content area - Resizable panels */}
+        {/* Main content area - 3 separate resizable panels */}
         <PanelGroup orientation="horizontal" className="flex-1">
-          {/* Main Content (Tabbed: Chat, Doc, Web, Video) */}
-          <Panel defaultSize={55} minSize={30}>
-            <div className="h-full border-r border-zinc-800">
-              <TabbedContentPanel
-                onShowShareModal={() => setShowShareFromClaude(true)}
-              />
+          {/* Panel 1: Chat / Web / Doc */}
+          <Panel defaultSize={40} minSize={20}>
+            <div className="h-full flex flex-col border-r border-zinc-800">
+              <div className="px-3 py-2 border-b border-zinc-800 bg-zinc-900 flex items-center gap-2">
+                <span className="text-xs text-zinc-500">Chat</span>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <TabbedContentPanel
+                  onShowShareModal={() => setShowShareFromClaude(true)}
+                />
+              </div>
             </div>
           </Panel>
 
           <PanelResizeHandle className="w-1 bg-zinc-800 hover:bg-cyan-500 transition-colors cursor-col-resize" />
 
-          {/* Right Panel (Notes | Brain | Files) */}
-          <Panel defaultSize={45} minSize={25}>
-            <RightPanel />
+          {/* Panel 2: Brain (AI Assistant) */}
+          <Panel defaultSize={35} minSize={20}>
+            <div className="h-full flex flex-col border-r border-zinc-800">
+              <div className="px-3 py-2 border-b border-zinc-800 bg-zinc-900 flex items-center gap-2">
+                <span className="text-sm">🧠</span>
+                <span className="text-xs text-zinc-500">Brain</span>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <AIWorkspacePanel />
+              </div>
+            </div>
+          </Panel>
+
+          <PanelResizeHandle className="w-1 bg-zinc-800 hover:bg-cyan-500 transition-colors cursor-col-resize" />
+
+          {/* Panel 3: Notes */}
+          <Panel defaultSize={25} minSize={15} collapsible={true} collapsedSize={0}>
+            <div className="h-full flex flex-col bg-zinc-950">
+              <div className="px-3 py-2 border-b border-zinc-800 bg-zinc-900 flex items-center gap-2">
+                <span className="text-sm">📝</span>
+                <span className="text-xs text-zinc-500">Notes</span>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <NotesPanel />
+              </div>
+            </div>
           </Panel>
         </PanelGroup>
 

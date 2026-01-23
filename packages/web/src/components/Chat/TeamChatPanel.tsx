@@ -31,6 +31,10 @@ export default function TeamChatPanel({ onShowShareModal, onOpenLinkInBrain }: T
   const [input, setInput] = useState('')
   const [isUploading, setIsUploading] = useState(false)
   const [showInviteModal, setShowInviteModal] = useState(false)
+  const [showFileSearch, setShowFileSearch] = useState(false)
+  const [fileSearchQuery, setFileSearchQuery] = useState('')
+  const [fileSearchResults, setFileSearchResults] = useState<any[]>([])
+  const [isSearching, setIsSearching] = useState(false)
   const [workspaceUsers, setWorkspaceUsers] = useState<{ id: string; name: string; email: string; avatar_url?: string }[]>([])
   const [invitingUser, setInvitingUser] = useState<string | null>(null)
   const [droppingBrainResponse, setDroppingBrainResponse] = useState(false)
@@ -208,6 +212,21 @@ export default function TeamChatPanel({ onShowShareModal, onOpenLinkInBrain }: T
 
   const getMember = (userId: string) => members.find((m) => m.user_id === userId)?.user
 
+  // File search
+  const handleFileSearch = async () => {
+    if (!fileSearchQuery.trim()) return
+    setIsSearching(true)
+    try {
+      const results = await filesApi.search(fileSearchQuery)
+      setFileSearchResults(results.documents || [])
+    } catch (err) {
+      console.error('File search failed:', err)
+      setFileSearchResults([])
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
   return (
     <div
       ref={drop}
@@ -255,6 +274,15 @@ export default function TeamChatPanel({ onShowShareModal, onOpenLinkInBrain }: T
               <div className="w-7 h-7 rounded-full bg-zinc-800 border-2 border-black flex items-center justify-center text-xs text-zinc-400">
                 +
               </div>
+            </button>
+            <button
+              onClick={() => setShowFileSearch(true)}
+              className="w-7 h-7 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center text-zinc-400 hover:text-white"
+              title="Search files"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
             </button>
             <button
               onClick={onShowShareModal}
@@ -505,6 +533,96 @@ export default function TeamChatPanel({ onShowShareModal, onOpenLinkInBrain }: T
             >
               Done
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* File Search Modal */}
+      {showFileSearch && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 rounded-xl p-6 w-full max-w-lg">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">Search Files</h2>
+              <button
+                onClick={() => {
+                  setShowFileSearch(false)
+                  setFileSearchQuery('')
+                  setFileSearchResults([])
+                }}
+                className="text-zinc-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex gap-2 mb-4">
+              <input
+                type="text"
+                value={fileSearchQuery}
+                onChange={(e) => setFileSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleFileSearch()
+                }}
+                placeholder="Search for files, docs, or content..."
+                className="flex-1 bg-zinc-800 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                autoFocus
+              />
+              <button
+                onClick={handleFileSearch}
+                disabled={isSearching || !fileSearchQuery.trim()}
+                className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 disabled:bg-zinc-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                {isSearching ? '...' : 'Search'}
+              </button>
+            </div>
+
+            <div className="max-h-80 overflow-auto">
+              {fileSearchResults.length === 0 ? (
+                <div className="text-center py-8 text-zinc-500">
+                  <svg className="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <p className="text-sm">
+                    {fileSearchQuery ? 'No files found' : 'Search for files in this channel'}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {fileSearchResults.map((file: any) => (
+                    <button
+                      key={file.id}
+                      onClick={() => {
+                        // Open file in Brain context
+                        useChatStore.getState().setBrainDocumentContext({ id: file.id, name: file.filename })
+                        useChatStore.getState().setSelectedDocument({ id: file.id, name: file.filename })
+                        useChatStore.getState().addBrainMessage({
+                          role: 'brain',
+                          content: `I've loaded "${file.filename}". What would you like to know about it?`,
+                        })
+                        setShowFileSearch(false)
+                        setFileSearchQuery('')
+                        setFileSearchResults([])
+                      }}
+                      className="w-full p-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-left transition-colors"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 rounded bg-zinc-700 flex items-center justify-center text-sm flex-shrink-0">
+                          {file.file_type?.includes('pdf') ? '📄' :
+                           file.file_type?.includes('image') ? '🖼️' :
+                           file.file_type?.includes('sheet') ? '📊' : '📁'}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium truncate">{file.filename}</p>
+                          <p className="text-xs text-zinc-500">
+                            {(file.file_size / 1024).toFixed(1)} KB
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

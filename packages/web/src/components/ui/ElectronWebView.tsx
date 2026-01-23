@@ -26,7 +26,7 @@ export default function ElectronWebView({
 }: ElectronWebViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [isUsingBrowserView, setIsUsingBrowserView] = useState(false)
-  const [iframeError, setIframeError] = useState(false)
+  const [iframeError] = useState(false)
   const [currentUrl, setCurrentUrl] = useState(url)
   const [currentTitle, setCurrentTitle] = useState(title)
   const [isLoading, setIsLoading] = useState(true)
@@ -175,11 +175,8 @@ export default function ElectronWebView({
     return await getPageContent(tabId)
   }, [tabId])
 
-  // Handle iframe load error (for web version)
-  const handleIframeError = useCallback(() => {
-    setIframeError(true)
-    setIsLoading(false)
-  }, [])
+  // Suppress unused variable warning - iframeError state kept for future use
+  void iframeError
 
   // Loading state
   if (isLoading) {
@@ -320,35 +317,45 @@ export default function ElectronWebView({
     )
   }
 
-  // Web fallback: try iframe
+  // Web fallback: Show a message that web browsing requires the desktop app
+  // Most sites block iframe embedding, so we provide a clear path forward
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex items-center gap-2 px-3 py-2 bg-zinc-900 border-b border-zinc-800">
+    <div className="h-full flex flex-col bg-zinc-900">
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-800">
+        <button
+          onClick={closeTab}
+          className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-medium rounded transition-colors"
+        >
+          Close
+        </button>
         <div className="flex-1 mx-2">
           <div className="bg-zinc-800 rounded px-3 py-1.5 text-sm text-zinc-400 truncate">
             {url}
           </div>
         </div>
+      </div>
+      <div className="flex-1 flex flex-col items-center justify-center p-8">
+        <div className="text-6xl mb-4">🌐</div>
+        <h3 className="text-xl font-medium text-white mb-2">Open in Browser</h3>
+        <p className="text-sm text-zinc-400 text-center mb-6 max-w-md">
+          For security reasons, most websites can't be embedded directly.
+          Click below to open in your browser.
+        </p>
         <a
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="p-1.5 text-zinc-500 hover:text-white hover:bg-zinc-800 rounded transition-colors"
-          title="Open in new tab"
+          className="px-6 py-3 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
           </svg>
+          Open {new URL(url).hostname}
         </a>
+        <p className="text-xs text-zinc-600 mt-8">
+          For full embedded browsing, use the Brain Trust desktop app
+        </p>
       </div>
-      <iframe
-        src={url}
-        className="flex-1 w-full bg-white"
-        title={title}
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-        onError={handleIframeError}
-        onLoad={() => setIsLoading(false)}
-      />
     </div>
   )
 }
