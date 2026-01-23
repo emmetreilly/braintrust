@@ -14,13 +14,14 @@ export default function ChannelSidebar({ onCreateChannel }: ChannelSidebarProps)
   const [showJoin, setShowJoin] = useState(false)
   const [inviteCode, setInviteCode] = useState('')
   const [joinError, setJoinError] = useState('')
+  const [isExpanded, setIsExpanded] = useState(false)
   const { groupId } = useParams<{ groupId: string }>()
-  const { user, workspace, logout } = useAuthStore()
+  const { user, logout } = useAuthStore()
   const navigate = useNavigate()
 
   useEffect(() => {
     loadChannels()
-  }, [groupId]) // Reload when switching channels (handles new channel creation)
+  }, [groupId])
 
   const loadChannels = async () => {
     try {
@@ -50,123 +51,156 @@ export default function ChannelSidebar({ onCreateChannel }: ChannelSidebarProps)
 
   return (
     <>
-      <div className="w-64 h-full bg-zinc-950 border-r border-zinc-800 flex flex-col shrink-0">
-        {/* Workspace Header */}
-        <div className="p-4 border-b border-zinc-800">
-          <button
-            onClick={() => navigate('/groups')}
-            className="flex items-center gap-3 w-full text-left hover:opacity-80 transition-opacity"
-          >
-            <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center font-bold text-lg">
-              {workspace?.name?.charAt(0) || 'W'}
-            </div>
-            <div className="flex-1 min-w-0">
-              <h1 className="font-semibold truncate">{workspace?.name || 'Workspace'}</h1>
-              <p className="text-xs text-zinc-500 truncate">{user?.email}</p>
-            </div>
-          </button>
-        </div>
+      {/* Expandable sidebar */}
+      <div
+        className={`h-full bg-zinc-950 border-r border-zinc-800 flex flex-col shrink-0 transition-all duration-200 ${
+          isExpanded ? 'w-48' : 'w-12'
+        }`}
+      >
+        {/* Top spacer for macOS traffic lights */}
+        <div className="h-10 shrink-0" />
 
-        {/* Quick Actions */}
-        <div className="p-3 border-b border-zinc-800 space-y-1">
-          <a
-            href="https://claude.ai"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-zinc-800 text-sm text-zinc-400 hover:text-white transition-colors"
-          >
-            <span>Open Claude</span>
-            <span className="ml-auto text-xs text-zinc-600">↗</span>
-          </a>
-          <button
-            onClick={() => navigate('/search')}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-zinc-800 text-sm text-zinc-400 hover:text-white transition-colors"
-          >
-            <span>🔍</span>
-            <span>Search Docs</span>
-          </button>
-          <button
-            onClick={onCreateChannel}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-zinc-800 text-sm text-zinc-400 hover:text-white transition-colors"
-          >
-            <span className="text-lg">+</span>
-            <span>New Channel</span>
-          </button>
-        </div>
-
-        {/* Channels List */}
-        <div className="flex-1 overflow-auto p-2">
-          <div className="px-2 py-1 text-xs text-zinc-500 font-medium uppercase tracking-wider">
-            Channels
+        {/* Channels section header (only when expanded) */}
+        {isExpanded && (
+          <div className="px-3 py-2 flex items-center justify-between">
+            <span className="text-xs font-medium text-zinc-500 uppercase tracking-wider">Channels</span>
           </div>
-          {isLoading ? (
-            <div className="px-3 py-2 text-sm text-zinc-500">Loading...</div>
-          ) : channels.length === 0 ? (
-            <div className="px-3 py-4 text-sm text-zinc-500 text-center">
-              No channels yet
-            </div>
-          ) : (
-            <div className="space-y-0.5">
-              {channels.map((channel) => {
+        )}
+
+        {/* Channels - scrollable */}
+        <div className="flex-1 overflow-auto py-2">
+          <div className={`flex flex-col ${isExpanded ? 'px-2' : 'items-center'} gap-1`}>
+            {isLoading ? (
+              <div className={`${isExpanded ? 'h-8 mx-1' : 'w-8 h-8'} rounded bg-zinc-800 animate-pulse`} />
+            ) : (
+              channels.map((channel) => {
                 const isActive = channel.id === groupId
                 return (
                   <button
                     key={channel.id}
                     onClick={() => navigate(`/chat/${channel.id}`)}
-                    className={`w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm text-left transition-colors group ${
+                    className={`${
+                      isExpanded
+                        ? 'w-full px-3 py-2 rounded-lg flex items-center gap-2 text-sm text-left'
+                        : 'w-10 h-10 rounded-lg flex items-center justify-center text-sm font-medium'
+                    } transition-colors ${
                       isActive
-                        ? 'bg-zinc-800 text-white'
-                        : 'hover:bg-zinc-800 text-zinc-300'
+                        ? 'bg-zinc-700 text-white'
+                        : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
                     }`}
+                    title={isExpanded ? undefined : channel.name}
                   >
-                    <span className={isActive ? 'text-zinc-300' : 'text-zinc-500 group-hover:text-zinc-300'}>#</span>
-                    <span className="flex-1 truncate">{channel.name.toLowerCase().replace(/\s+/g, '-')}</span>
+                    {isExpanded ? (
+                      <>
+                        <span className="text-zinc-500">#</span>
+                        <span className="truncate">{channel.name.toLowerCase().replace(/\s+/g, '-')}</span>
+                      </>
+                    ) : (
+                      channel.name.charAt(0).toUpperCase()
+                    )}
                   </button>
                 )
-              })}
-            </div>
-          )}
+              })
+            )}
 
-          {/* Join with Code */}
-          <div className="mt-4 px-2 py-1 text-xs text-zinc-500 font-medium uppercase tracking-wider">
-            Join
+            {/* Add channel */}
+            <button
+              onClick={onCreateChannel}
+              className={`${
+                isExpanded
+                  ? 'w-full px-3 py-2 rounded-lg flex items-center gap-2 text-sm text-left text-zinc-500 hover:text-white hover:bg-zinc-800'
+                  : 'w-10 h-10 rounded-lg flex items-center justify-center text-zinc-500 hover:text-white hover:bg-zinc-800 border border-dashed border-zinc-700 hover:border-zinc-500'
+              } transition-colors`}
+              title={isExpanded ? undefined : 'New Channel'}
+            >
+              {isExpanded ? (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>Add Channel</span>
+                </>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              )}
+            </button>
           </div>
-          <button
-            onClick={() => setShowJoin(true)}
-            className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-zinc-800 text-sm text-zinc-400 hover:text-white transition-colors"
-          >
-            <span>🔗</span>
-            <span>Join with code</span>
-          </button>
         </div>
 
-        {/* User Footer */}
-        <div className="p-3 border-t border-zinc-800">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center text-sm font-medium">
-              {user?.name?.charAt(0) || '?'}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{user?.name}</p>
-            </div>
+        {/* Bottom icons */}
+        <div className={`${isExpanded ? 'px-2' : ''} py-2 border-t border-zinc-800`}>
+          <div className={`flex flex-col ${isExpanded ? '' : 'items-center'} gap-1`}>
+            {/* Expand/Collapse toggle */}
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className={`${
+                isExpanded
+                  ? 'w-full px-3 py-2 rounded-lg flex items-center gap-2 text-sm'
+                  : 'w-10 h-10 rounded-lg flex items-center justify-center'
+              } text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors`}
+              title={isExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
+            >
+              <svg className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+              </svg>
+              {isExpanded && <span>Collapse</span>}
+            </button>
+
+            {/* Join */}
+            <button
+              onClick={() => setShowJoin(true)}
+              className={`${
+                isExpanded
+                  ? 'w-full px-3 py-2 rounded-lg flex items-center gap-2 text-sm'
+                  : 'w-10 h-10 rounded-lg flex items-center justify-center'
+              } text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors`}
+              title={isExpanded ? undefined : 'Join Channel'}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+              </svg>
+              {isExpanded && <span>Join Channel</span>}
+            </button>
+
+            {/* Settings */}
             <button
               onClick={() => navigate('/settings')}
-              className="text-zinc-500 hover:text-white p-1"
-              title="Settings"
+              className={`${
+                isExpanded
+                  ? 'w-full px-3 py-2 rounded-lg flex items-center gap-2 text-sm'
+                  : 'w-10 h-10 rounded-lg flex items-center justify-center'
+              } text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors`}
+              title={isExpanded ? undefined : 'Settings'}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
+              {isExpanded && <span>Settings</span>}
             </button>
+
+            {/* User avatar */}
             <button
               onClick={logout}
-              className="text-zinc-500 hover:text-white p-1"
-              title="Sign out"
+              className={`${
+                isExpanded
+                  ? 'w-full px-3 py-2 rounded-lg flex items-center gap-2 text-sm'
+                  : 'w-10 h-10 rounded-full flex items-center justify-center'
+              } ${isExpanded ? 'text-zinc-400 hover:text-white hover:bg-zinc-800' : 'bg-zinc-700 hover:bg-zinc-600 text-white'} transition-colors`}
+              title={isExpanded ? undefined : `${user?.name} - Sign out`}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
+              {isExpanded ? (
+                <>
+                  <div className="w-6 h-6 rounded-full bg-zinc-700 flex items-center justify-center text-xs font-medium">
+                    {user?.name?.charAt(0) || '?'}
+                  </div>
+                  <span className="truncate">{user?.name || 'Sign out'}</span>
+                </>
+              ) : (
+                <span className="text-xs font-medium">{user?.name?.charAt(0) || '?'}</span>
+              )}
             </button>
           </div>
         </div>

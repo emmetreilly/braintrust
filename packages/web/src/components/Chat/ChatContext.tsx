@@ -211,6 +211,16 @@ export function ChatProvider({ groupId, children }: ChatProviderProps) {
           useChatStore.getState().addBrainMessage({ role: 'brain', content: brainResponse.content })
         } catch (err) {
           console.error('Brain response error:', err)
+          // Show error message to user
+          const errorMessage: Message = {
+            id: `brain-error-${Date.now()}`,
+            group_id: groupId,
+            user_id: 'brain-system',
+            type: 'brain_response',
+            content: `Sorry, I encountered an error: ${err instanceof Error ? err.message : 'Please try again.'}`,
+            created_at: new Date().toISOString(),
+          }
+          useChatStore.getState().addMessage(errorMessage)
         } finally {
           useChatStore.getState().setBrainLoading(false)
         }

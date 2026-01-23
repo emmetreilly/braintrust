@@ -6,8 +6,8 @@ import type { GroupMember, Group, DocumentTag } from '../types'
 
 interface Integration {
   id: string
-  provider: 'slack' | 'google_drive' | 'gmail' | 'hubspot'
-  status: 'active' | 'syncing' | 'error' | 'disconnected'
+  provider: string
+  status: string
   items_indexed: number
   last_sync_at?: string
 }
@@ -484,26 +484,6 @@ export default function Settings() {
   }
 
   const getIntegration = (provider: string) => integrationsList.find(i => i.provider === provider)
-
-  const getProviderName = (provider: string) => {
-    switch (provider) {
-      case 'slack': return 'Slack'
-      case 'google_drive': return 'Google Drive'
-      case 'gmail': return 'Gmail'
-      case 'hubspot': return 'HubSpot'
-      default: return provider
-    }
-  }
-
-  const getProviderIcon = (provider: string) => {
-    switch (provider) {
-      case 'slack': return '💬'
-      case 'google_drive': return '📁'
-      case 'gmail': return '📧'
-      case 'hubspot': return '🔶'
-      default: return '📱'
-    }
-  }
 
   // Channel Settings View
   if (isChannelSettings) {

@@ -3,9 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/auth'
 import { useChatStore } from '../stores/chat'
 import { ChatProvider, useChatContext } from '../components/Chat/ChatContext'
-import TeamChatPanel from '../components/Chat/TeamChatPanel'
-import AIWorkspacePanel from '../components/AIWorkspace/AIWorkspacePanel'
-import MediaLibraryPanel from '../components/MediaLibrary/MediaLibraryPanel'
+import TabbedContentPanel from '../components/ui/TabbedContentPanel'
+import RightPanel from '../components/RightPanel/RightPanel'
 import ChannelSidebar from '../components/ChannelSidebar'
 import { DragDropProvider } from '../components/ui/DragDropContext'
 import { groups as groupsApi, files as filesApi } from '../lib/api'
@@ -14,7 +13,7 @@ import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from 'reac
 function ChatContent() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
-  const { groupId, isLoading, showMediaLibrary, setShowMediaLibrary, toggleMediaLibrary, setEmbeddedUrl } = useChatStore()
+  const { groupId, isLoading } = useChatStore()
   const { sendWsMessage, refreshDocuments } = useChatContext()
   const { addMessage } = useChatStore()
 
@@ -26,7 +25,6 @@ function ChatContent() {
   const [claudeContent, setClaudeContent] = useState('')
   const [claudeTitle, setClaudeTitle] = useState('')
   const [sharingFromClaude, setSharingFromClaude] = useState(false)
-  const [showChannelSidebar, setShowChannelSidebar] = useState(true)
 
   const handleCreateChannel = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -71,11 +69,6 @@ function ChatContent() {
     }
   }
 
-  // Handle link clicks from messages to open in Brain panel
-  const handleOpenLinkInBrain = (url: string) => {
-    setEmbeddedUrl(url)
-  }
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center">
@@ -87,80 +80,27 @@ function ChatContent() {
   return (
     <DragDropProvider>
       <div className="bg-black h-screen text-white flex overflow-hidden">
-        {/* Left: Channel Sidebar - Collapsible */}
-        {showChannelSidebar && (
-          <div className="hidden lg:flex h-screen flex-shrink-0">
-            <ChannelSidebar onCreateChannel={() => setShowCreateChannel(true)} />
-          </div>
-        )}
-
-        {/* Toggle buttons for sidebars */}
-        <div className="absolute top-3 left-3 z-20 flex gap-1">
-          <button
-            onClick={() => setShowChannelSidebar(!showChannelSidebar)}
-            className="w-8 h-8 bg-zinc-800/80 backdrop-blur rounded-lg flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-700 transition-colors"
-            title={showChannelSidebar ? 'Hide channels' : 'Show channels'}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="absolute top-3 right-3 z-20 flex gap-1">
-          <button
-            onClick={toggleMediaLibrary}
-            className={`w-8 h-8 backdrop-blur rounded-lg flex items-center justify-center transition-colors ${
-              showMediaLibrary ? 'bg-cyan-600/80 text-white' : 'bg-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-700'
-            }`}
-            title={showMediaLibrary ? 'Hide media library' : 'Show media library'}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
-            </svg>
-          </button>
+        {/* Left: Channel Sidebar - Always visible, VS Code style */}
+        <div className="hidden lg:flex h-screen flex-shrink-0">
+          <ChannelSidebar onCreateChannel={() => setShowCreateChannel(true)} />
         </div>
 
         {/* Main content area - Resizable panels */}
         <PanelGroup orientation="horizontal" className="flex-1">
-          {/* Team Chat */}
-          <Panel defaultSize={40} minSize={20}>
+          {/* Main Content (Tabbed: Chat, Doc, Web, Video) */}
+          <Panel defaultSize={55} minSize={30}>
             <div className="h-full border-r border-zinc-800">
-              <TeamChatPanel
+              <TabbedContentPanel
                 onShowShareModal={() => setShowShareFromClaude(true)}
-                onOpenLinkInBrain={handleOpenLinkInBrain}
               />
             </div>
           </Panel>
 
           <PanelResizeHandle className="w-1 bg-zinc-800 hover:bg-cyan-500 transition-colors cursor-col-resize" />
 
-          {/* Brain/AI Panel */}
-          <Panel defaultSize={40} minSize={20}>
-            <div className="h-full">
-              <AIWorkspacePanel />
-            </div>
-          </Panel>
-
-          <PanelResizeHandle className="w-1 bg-zinc-800 hover:bg-cyan-500 transition-colors cursor-col-resize" />
-
-          {/* Media Library - Collapsible by dragging */}
-          <Panel
-            defaultSize={20}
-            minSize={0}
-            collapsible={true}
-            collapsedSize={0}
-            onResize={(panelSize) => {
-              // Update visibility state based on size
-              const sizePercent = panelSize.asPercentage
-              if (sizePercent === 0 && showMediaLibrary) {
-                setShowMediaLibrary(false)
-              } else if (sizePercent > 0 && !showMediaLibrary) {
-                setShowMediaLibrary(true)
-              }
-            }}
-          >
-            <MediaLibraryPanel />
+          {/* Right Panel (Notes | Brain | Files) */}
+          <Panel defaultSize={45} minSize={25}>
+            <RightPanel />
           </Panel>
         </PanelGroup>
 

@@ -6,8 +6,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8787',
+        // Use production worker for now (local wrangler requires additional setup)
+        // Change back to 'http://localhost:8787' when running worker locally
+        target: 'https://brain-trust-worker.e-caa.workers.dev',
         changeOrigin: true,
+        secure: true,
       },
     },
   },

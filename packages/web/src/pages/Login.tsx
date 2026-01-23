@@ -4,7 +4,9 @@ import { useAuthStore } from '../stores/auth'
 
 type Step = 'welcome' | 'form'
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://brain-trust-worker.e-caa.workers.dev'
+// For OAuth, we need the full URL. In dev, use localhost worker; in prod, use deployed worker.
+const API_URL = import.meta.env.VITE_API_URL ||
+  (window.location.hostname === 'localhost' ? '' : 'https://brain-trust-worker.e-caa.workers.dev')
 
 export default function Login() {
   const [step, setStep] = useState<Step>('welcome')

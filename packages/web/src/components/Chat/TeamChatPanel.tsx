@@ -211,7 +211,7 @@ export default function TeamChatPanel({ onShowShareModal, onOpenLinkInBrain }: T
   return (
     <div
       ref={drop}
-      className={`flex-1 flex flex-col h-screen overflow-hidden transition-colors ${
+      className={`flex-1 flex flex-col h-full overflow-hidden transition-colors ${
         isOver && canDrop ? 'bg-cyan-950/20 ring-2 ring-inset ring-cyan-500/50' : ''
       }`}
     >

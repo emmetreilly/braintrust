@@ -43,21 +43,17 @@ search.post('/', async (c) => {
   }
 
   try {
-    // 1. Generate embedding for the query
-    const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${c.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'text-embedding-3-small',
-        input: query,
-      }),
-    })
-
-    const embeddingData = await embeddingResponse.json() as any
-    const queryEmbedding = embeddingData.data?.[0]?.embedding
+    // 1. Generate embedding for the query using Cloudflare AI (same as indexing)
+    // IMPORTANT: Must use same model as indexing to ensure dimension match (768)
+    let queryEmbedding: number[] | null = null
+    try {
+      const embeddingResponse = await c.env.AI.run('@cf/baai/bge-base-en-v1.5', {
+        text: [query],
+      }) as { data: number[][] }
+      queryEmbedding = embeddingResponse.data?.[0] || null
+    } catch (embError) {
+      console.error('Cloudflare AI embedding error:', embError)
+    }
 
     // 2. Search Vectorize for similar items
     let vectorResults: { id: string; score: number }[] = []

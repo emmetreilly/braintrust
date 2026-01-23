@@ -255,8 +255,22 @@ export default function MediaLibraryPanel() {
     )
   }
 
+  const { addContentTab } = useChatStore()
+
   const handleDocumentClick = (doc: Document) => {
+    // Open in Brain context for AI discussion
     openDocumentInBrain(doc)
+
+    // Also open in a content tab for viewing
+    // Construct download URL for the document
+    const downloadUrl = `https://brain-trust-worker.e-caa.workers.dev/api/documents/${doc.id}/download`
+
+    addContentTab({
+      type: 'doc',
+      title: doc.filename,
+      documentId: doc.id,
+      documentUrl: downloadUrl,
+    })
   }
 
   return (

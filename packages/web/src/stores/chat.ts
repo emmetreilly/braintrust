@@ -20,6 +20,17 @@ export interface BrainTab {
   messages: ThreadMessage[]
 }
 
+export interface ContentTab {
+  id: string
+  type: 'chat' | 'doc' | 'web' | 'video'
+  title: string
+  // For doc tabs
+  documentId?: string
+  documentUrl?: string
+  // For web/video tabs
+  url?: string
+}
+
 interface ChatState {
   // Current channel
   groupId: string | null
@@ -62,6 +73,10 @@ interface ChatState {
   // Panel visibility
   showMediaLibrary: boolean
 
+  // Content tabs (VS Code style tabs in main content area)
+  contentTabs: ContentTab[]
+  activeContentTabId: string
+
   // Actions
   setGroupId: (groupId: string | null) => void
   setGroup: (group: Group | null) => void
@@ -99,11 +114,20 @@ interface ChatState {
   setShowMediaLibrary: (show: boolean) => void
   toggleMediaLibrary: () => void
 
+  // Content tab actions
+  addContentTab: (tab: Omit<ContentTab, 'id'>) => void
+  closeContentTab: (tabId: string) => void
+  removeContentTab: (tabId: string) => void
+  setActiveContentTab: (tabId: string) => void
+  setActiveContentTabId: (tabId: string) => void
+  reorderContentTabs: (fromIndex: number, toIndex: number) => void
+
   // Reset when changing channels
   reset: () => void
 }
 
 const DEFAULT_TAB_ID = 'general'
+const DEFAULT_CONTENT_TAB_ID = 'chat'
 
 const initialState = {
   groupId: null,
@@ -129,6 +153,12 @@ const initialState = {
   activeDragType: null,
   brainInputPrefill: null,
   showMediaLibrary: true,
+  contentTabs: [{
+    id: DEFAULT_CONTENT_TAB_ID,
+    type: 'chat',
+    title: 'Chat',
+  }] as ContentTab[],
+  activeContentTabId: DEFAULT_CONTENT_TAB_ID,
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -248,6 +278,64 @@ export const useChatStore = create<ChatState>((set) => ({
   setBrainInputPrefill: (brainInputPrefill) => set({ brainInputPrefill }),
   setShowMediaLibrary: (showMediaLibrary) => set({ showMediaLibrary }),
   toggleMediaLibrary: () => set((state) => ({ showMediaLibrary: !state.showMediaLibrary })),
+
+  // Content tab actions
+  addContentTab: (tab) => set((state) => {
+    // Check if tab with same content already exists
+    const existingTab = state.contentTabs.find(t =>
+      (tab.type === 'doc' && t.documentId === tab.documentId) ||
+      (tab.type === 'web' && t.url === tab.url) ||
+      (tab.type === 'video' && t.url === tab.url)
+    )
+    if (existingTab) {
+      return { activeContentTabId: existingTab.id }
+    }
+
+    const newTabId = `content-${Date.now()}`
+    const newTab: ContentTab = { id: newTabId, ...tab }
+    return {
+      contentTabs: [...state.contentTabs, newTab],
+      activeContentTabId: newTabId,
+    }
+  }),
+
+  closeContentTab: (tabId) => set((state) => {
+    // Cannot close the chat tab
+    if (tabId === DEFAULT_CONTENT_TAB_ID) return state
+
+    const newTabs = state.contentTabs.filter(t => t.id !== tabId)
+    const wasActive = state.activeContentTabId === tabId
+    const newActiveId = wasActive ? newTabs[newTabs.length - 1].id : state.activeContentTabId
+
+    return {
+      contentTabs: newTabs,
+      activeContentTabId: newActiveId,
+    }
+  }),
+
+  setActiveContentTab: (tabId) => set({ activeContentTabId: tabId }),
+  setActiveContentTabId: (tabId) => set({ activeContentTabId: tabId }),
+
+  removeContentTab: (tabId) => set((state) => {
+    // Cannot close the chat tab
+    if (tabId === DEFAULT_CONTENT_TAB_ID) return state
+
+    const newTabs = state.contentTabs.filter(t => t.id !== tabId)
+    const wasActive = state.activeContentTabId === tabId
+    const newActiveId = wasActive ? newTabs[newTabs.length - 1].id : state.activeContentTabId
+
+    return {
+      contentTabs: newTabs,
+      activeContentTabId: newActiveId,
+    }
+  }),
+
+  reorderContentTabs: (fromIndex, toIndex) => set((state) => {
+    const newTabs = [...state.contentTabs]
+    const [movedTab] = newTabs.splice(fromIndex, 1)
+    newTabs.splice(toIndex, 0, movedTab)
+    return { contentTabs: newTabs }
+  }),
 
   reset: () => set(initialState),
 }))

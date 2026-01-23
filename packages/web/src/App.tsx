@@ -2,11 +2,9 @@ import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/auth'
 import Login from './pages/Login'
-import Home from './pages/Home'
 import Groups from './pages/Groups'
 import Chat from './pages/Chat'
 import Settings from './pages/Settings'
-import Search from './pages/Search'
 
 function LoadingScreen() {
   return (
@@ -81,18 +79,10 @@ export default function App() {
           }
         />
         <Route
-          path="/search"
-          element={
-            <ProtectedRoute>
-              <Search />
-            </ProtectedRoute>
-          }
-        />
-        <Route
           path="/"
           element={
             <ProtectedRoute>
-              <Home />
+              <Navigate to="/groups" replace />
             </ProtectedRoute>
           }
         />

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { useDrag, useDrop } from 'react-dnd'
 import { useChatStore, AttachedFile } from '../../stores/chat'
 import { useChatContext } from '../Chat/ChatContext'
+import { useAuthStore } from '../../stores/auth'
 import { files as filesApi } from '../../lib/api'
 import { DragTypes, BrainDragItem, MessageDragItem, FileDragItem } from '../ui/DragDropContext'
 import WebEmbed from './WebEmbed'
@@ -54,7 +55,7 @@ function DraggableBrainMessage({
   const renderContent = () => {
     const urls = extractUrls(content)
     if (urls.length === 0) {
-      return <p className="whitespace-pre-line text-xs">{content}</p>
+      return <p className="whitespace-pre-line text-sm leading-relaxed">{content}</p>
     }
 
     let lastIndex = 0
@@ -71,7 +72,7 @@ function DraggableBrainMessage({
             e.stopPropagation()
             onLinkClick(url)
           }}
-          className={`text-cyan-400 hover:underline ${isEmbeddableUrl(url) ? 'bg-cyan-500/10 px-1 rounded' : ''}`}
+          className={`text-[#D97706] hover:underline ${isEmbeddableUrl(url) ? 'bg-amber-500/10 px-1 rounded' : ''}`}
         >
           {url}
         </button>
@@ -82,26 +83,20 @@ function DraggableBrainMessage({
       parts.push(<span key="text-end">{content.slice(lastIndex)}</span>)
     }
 
-    return <p className="whitespace-pre-line text-xs">{parts}</p>
+    return <p className="whitespace-pre-line text-sm leading-relaxed">{parts}</p>
   }
 
   return (
-    <div className="flex flex-col gap-1 max-w-[85%]">
+    <div className="flex flex-col gap-2 max-w-full">
       <div className="relative group">
         <div
           ref={drag}
           onClick={onSelect}
-          className={`rounded-xl px-3 py-2 text-sm bg-zinc-900 rounded-bl-sm cursor-pointer hover:bg-zinc-800/80 transition-opacity ${
-            isSelected ? 'ring-1 ring-cyan-500' : ''
+          className={`cursor-pointer transition-opacity ${
+            isSelected ? 'bg-zinc-800/50 -mx-2 px-2 py-1 rounded' : ''
           } ${isDragging ? 'opacity-50' : ''}`}
         >
           {renderContent()}
-        </div>
-        {/* Drag hint */}
-        <div className="absolute -right-6 top-1/2 -translate-y-1/2 text-zinc-600 opacity-0 group-hover:opacity-100 transition-opacity">
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M8 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM8 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM8 18a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM20 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM20 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0zM20 18a2 2 0 1 1-4 0 2 2 0 0 1 4 0z" />
-          </svg>
         </div>
       </div>
       {/* Share button */}
@@ -109,16 +104,16 @@ function DraggableBrainMessage({
         <button
           onClick={onShare}
           disabled={sharing}
-          className="self-start ml-8 flex items-center gap-1 text-[10px] bg-cyan-500/20 text-cyan-400 px-2 py-1 rounded-full hover:bg-cyan-500/30 transition-colors disabled:opacity-50"
+          className="self-start flex items-center gap-1 text-xs text-zinc-400 hover:text-white transition-colors disabled:opacity-50"
         >
           {sharing ? (
-            '...'
+            'Sharing...'
           ) : (
             <>
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
               </svg>
-              Share to Chat
+              Share to chat
             </>
           )}
         </button>
@@ -128,6 +123,7 @@ function DraggableBrainMessage({
 }
 
 export default function BrainThread() {
+  const { user } = useAuthStore()
   const {
     brainMessages, brainLoading, brainDocumentContext, groupId,
     embeddedUrl, setEmbeddedUrl, brainInputPrefill, setBrainInputPrefill,
@@ -143,7 +139,7 @@ export default function BrainThread() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLTextAreaElement>(null)
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -170,7 +166,6 @@ export default function BrainThread() {
         inputRef.current?.focus()
       } else if (item.type === DragTypes.MEDIA_FILE) {
         const fileItem = item as FileDragItem
-        // Create a new tab for this file context
         addBrainTab(fileItem.filename, fileItem.fileId, fileItem.filename)
         setInput(`Tell me about this file.`)
         inputRef.current?.focus()
@@ -263,127 +258,184 @@ export default function BrainThread() {
     return <WebEmbed url={embeddedUrl} onClose={() => setEmbeddedUrl(null)} />
   }
 
+  const firstName = user?.name?.split(' ')[0] || 'there'
+  const hasMessages = brainMessages.length > 1 || (brainMessages.length === 1 && brainMessages[0].role === 'user')
+
   return (
     <div
       ref={drop}
-      className={`h-full flex flex-col bg-zinc-950 transition-colors ${
-        isOver && canDrop ? 'bg-cyan-950/30 ring-2 ring-inset ring-cyan-500' : ''
+      className={`h-full flex flex-col bg-black transition-colors ${
+        isOver && canDrop ? 'ring-2 ring-inset ring-[#D97706]' : ''
       }`}
     >
-      {/* Header with tabs */}
-      <div className="border-b border-zinc-800">
-        {/* Tab bar */}
-        <div className="flex items-center gap-1 px-2 pt-2 overflow-x-auto">
-          {brainTabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveBrainTab(tab.id)}
-              className={`group flex items-center gap-1 px-3 py-1.5 text-xs rounded-t transition-colors ${
-                activeBrainTabId === tab.id
-                  ? 'bg-zinc-900 text-white'
-                  : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'
-              }`}
-            >
-              <span className="truncate max-w-24">{tab.name}</span>
-              {brainTabs.length > 1 && (
-                <span
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    closeBrainTab(tab.id)
-                  }}
-                  className="ml-1 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity"
-                >
-                  x
-                </span>
-              )}
-            </button>
-          ))}
-          <button
-            onClick={() => addBrainTab('New Chat')}
-            className="px-2 py-1.5 text-xs text-zinc-500 hover:text-white transition-colors"
-            title="New conversation"
-          >
-            +
-          </button>
-        </div>
-
-        {/* Context indicator */}
-        {brainDocumentContext && (
-          <div className="px-3 py-1 text-[10px] text-cyan-400 bg-cyan-500/5">
-            Context: {brainDocumentContext.name}
-          </div>
-        )}
-      </div>
-
-      {/* Drop zone indicator */}
-      {(isOver && canDrop) && (
-        <div className="px-3 py-2 bg-cyan-500/20 text-cyan-400 text-xs text-center border-b border-cyan-500/30">
-          Drop to ask Brain about this
-        </div>
-      )}
-
-      {/* Messages */}
-      <div className="flex-1 overflow-auto p-3 space-y-3">
-        {brainMessages.map((msg, i) => (
+      {/* Tab bar - always visible, same style as ContentTabBar */}
+      <div className="flex items-center bg-zinc-900 border-b border-zinc-800 overflow-x-auto">
+        {brainTabs.map(tab => (
           <div
-            key={msg.id || i}
-            className={`flex gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}
+            key={tab.id}
+            className={`group flex items-center gap-2 px-3 py-2 text-sm cursor-pointer border-r border-zinc-800 min-w-0 ${
+              activeBrainTabId === tab.id
+                ? 'bg-zinc-800 text-white'
+                : 'text-zinc-400 hover:text-white hover:bg-zinc-800/50'
+            }`}
+            onClick={() => setActiveBrainTab(tab.id)}
           >
-            {msg.role === 'brain' && (
-              <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-xs shrink-0">
-                🧠
-              </div>
-            )}
-            {msg.role === 'user' ? (
-              <div className="rounded-xl px-3 py-2 text-sm bg-cyan-600 rounded-br-sm max-w-[85%]">
-                <p className="whitespace-pre-line text-xs">{msg.content}</p>
-              </div>
-            ) : (
-              <DraggableBrainMessage
-                content={msg.content}
-                index={i}
-                documentContext={brainDocumentContext}
-                isSelected={selectedMessage === i}
-                onSelect={() => i > 0 && setSelectedMessage(selectedMessage === i ? null : i)}
-                onShare={() => handleShare(i)}
-                sharing={sharing}
-                onLinkClick={handleLinkClick}
-              />
+            <span className="text-xs">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+              </svg>
+            </span>
+            <span className="truncate max-w-[120px]">{tab.name}</span>
+            {brainTabs.length > 1 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  closeBrainTab(tab.id)
+                }}
+                className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-white ml-1 transition-opacity"
+              >
+                ×
+              </button>
             )}
           </div>
         ))}
+        <button
+          onClick={() => addBrainTab('New Chat')}
+          className="px-3 py-2 text-zinc-500 hover:text-white hover:bg-zinc-800/50 transition-colors"
+          title="New conversation"
+        >
+          +
+        </button>
+      </div>
 
-        {/* Loading indicator - show only when waiting for first token */}
-        {brainLoading && brainMessages[brainMessages.length - 1]?.content === '' && (
-          <div className="flex gap-2">
-            <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-xs">
-              🧠
-            </div>
-            <div className="bg-zinc-900 rounded-xl px-3 py-2 rounded-bl-sm">
-              <div className="flex items-center gap-2">
-                <div className="flex gap-1">
-                  <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce" />
-                  <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-                  <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-                </div>
-                <span className="text-[10px] text-zinc-500">Thinking...</span>
+      {/* Context indicator */}
+      {brainDocumentContext && (
+        <div className="px-4 py-2 text-xs text-zinc-400 bg-zinc-900/50 border-b border-zinc-800 flex items-center gap-2">
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          {brainDocumentContext.name}
+        </div>
+      )}
+
+      {/* Drop zone indicator */}
+      {(isOver && canDrop) && (
+        <div className="px-4 py-3 bg-[#D97706]/10 text-[#D97706] text-sm text-center border-b border-[#D97706]/30">
+          Drop to ask about this
+        </div>
+      )}
+
+      {/* Messages area */}
+      <div className="flex-1 overflow-auto">
+        {!hasMessages ? (
+          /* Empty state - Claude-like greeting */
+          <div className="h-full flex flex-col items-center justify-center px-8">
+            <div className="max-w-md text-center">
+              <h1 className="text-2xl font-light text-white mb-2">
+                Hey {firstName}
+              </h1>
+              <p className="text-zinc-400 text-sm mb-8">
+                Ask me anything about your workspace documents, conversations, or just chat.
+              </p>
+
+              {/* Suggestion chips */}
+              <div className="flex flex-wrap justify-center gap-2">
+                <button
+                  onClick={() => setInput('Summarize recent conversations')}
+                  className="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300 transition-colors"
+                >
+                  Summarize recent conversations
+                </button>
+                <button
+                  onClick={() => setInput('What files were shared this week?')}
+                  className="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300 transition-colors"
+                >
+                  What files were shared this week?
+                </button>
+                <button
+                  onClick={() => setInput('Help me draft a message')}
+                  className="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 rounded-full text-zinc-300 transition-colors"
+                >
+                  Help me draft a message
+                </button>
               </div>
             </div>
           </div>
-        )}
+        ) : (
+          /* Messages */
+          <div className="p-4 space-y-6">
+            {brainMessages.map((msg, i) => (
+              <div key={msg.id || i}>
+                {msg.role === 'user' ? (
+                  <div className="flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-full bg-zinc-700 flex items-center justify-center text-xs font-medium shrink-0">
+                      {user?.name?.charAt(0) || '?'}
+                    </div>
+                    <div className="pt-1">
+                      <p className="text-sm font-medium text-white mb-1">{user?.name || 'You'}</p>
+                      <p className="text-sm text-zinc-300 whitespace-pre-line">{msg.content}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-3">
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#D97706] to-[#F59E0B] flex items-center justify-center shrink-0">
+                      <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                      </svg>
+                    </div>
+                    <div className="pt-1 flex-1 min-w-0">
+                      <p className="text-sm font-medium text-[#D97706] mb-1">Brain</p>
+                      <DraggableBrainMessage
+                        content={msg.content}
+                        index={i}
+                        documentContext={brainDocumentContext}
+                        isSelected={selectedMessage === i}
+                        onSelect={() => i > 0 && setSelectedMessage(selectedMessage === i ? null : i)}
+                        onShare={() => handleShare(i)}
+                        sharing={sharing}
+                        onLinkClick={handleLinkClick}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
 
-        {/* Streaming cursor - show typing effect when content is streaming */}
-        {brainLoading && brainMessages[brainMessages.length - 1]?.content !== '' && (
-          <div className="ml-8 text-cyan-400 text-xs animate-pulse">
-            ▋
+            {/* Loading indicator */}
+            {brainLoading && brainMessages[brainMessages.length - 1]?.content === '' && (
+              <div className="flex items-start gap-3">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#D97706] to-[#F59E0B] flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                  </svg>
+                </div>
+                <div className="pt-1">
+                  <p className="text-sm font-medium text-[#D97706] mb-1">Brain</p>
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1">
+                      <div className="w-1.5 h-1.5 bg-[#D97706] rounded-full animate-bounce" />
+                      <div className="w-1.5 h-1.5 bg-[#D97706] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+                      <div className="w-1.5 h-1.5 bg-[#D97706] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Streaming cursor */}
+            {brainLoading && brainMessages[brainMessages.length - 1]?.content !== '' && (
+              <div className="ml-10 text-[#D97706] animate-pulse">
+                |
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
           </div>
         )}
-
-        <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="p-3 border-t border-zinc-800">
+      {/* Input area */}
+      <div className="p-4 border-t border-zinc-800 bg-black">
         {/* Hidden file input */}
         <input
           ref={fileInputRef}
@@ -396,19 +448,23 @@ export default function BrainThread() {
 
         {/* Attached files */}
         {attachedFiles.length > 0 && (
-          <div className="flex flex-wrap gap-1 mb-2">
+          <div className="flex flex-wrap gap-2 mb-3">
             {attachedFiles.map(file => (
               <div
                 key={file.id}
-                className="flex items-center gap-1 bg-zinc-800 rounded px-2 py-1 text-[10px]"
+                className="flex items-center gap-2 bg-zinc-800 rounded-lg px-3 py-1.5 text-xs"
               >
-                <span>📄</span>
-                <span className="truncate max-w-20">{file.name}</span>
+                <svg className="w-3.5 h-3.5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span className="truncate max-w-32">{file.name}</span>
                 <button
                   onClick={() => removeAttachedFile(file.id)}
                   className="text-zinc-500 hover:text-white"
                 >
-                  ✕
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
               </div>
             ))}
@@ -417,48 +473,50 @@ export default function BrainThread() {
 
         {/* Uploading indicator */}
         {uploading && (
-          <div className="flex items-center gap-2 mb-2 text-[10px] text-cyan-400">
+          <div className="flex items-center gap-2 mb-3 text-xs text-[#D97706]">
             <div className="flex gap-0.5">
-              <div className="w-1 h-1 bg-cyan-400 rounded-full animate-bounce" />
-              <div className="w-1 h-1 bg-cyan-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-              <div className="w-1 h-1 bg-cyan-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
+              <div className="w-1 h-1 bg-[#D97706] rounded-full animate-bounce" />
+              <div className="w-1 h-1 bg-[#D97706] rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
+              <div className="w-1 h-1 bg-[#D97706] rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
             </div>
             Uploading...
           </div>
         )}
 
-        <div className="flex gap-2">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="w-9 h-9 bg-zinc-800 text-zinc-400 hover:text-white rounded-full flex items-center justify-center text-lg disabled:opacity-50 hover:bg-zinc-700 transition-colors flex-shrink-0"
-            title="Attach files"
-          >
-            +
-          </button>
-          <input
+        {/* Input box */}
+        <div className="relative bg-zinc-900 rounded-xl border border-zinc-700 focus-within:border-zinc-600 transition-colors">
+          <textarea
             ref={inputRef}
-            type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={
-              brainDocumentContext
-                ? `Ask about ${brainDocumentContext.name}...`
-                : attachedFiles.length > 0
-                ? 'Ask about files...'
-                : 'Ask Brain anything...'
-            }
+            placeholder="Ask anything..."
             disabled={brainLoading}
-            className="flex-1 bg-zinc-900 rounded-full px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-cyan-500 disabled:opacity-50"
+            rows={1}
+            className="w-full bg-transparent px-4 py-3 pr-24 text-sm resize-none focus:outline-none disabled:opacity-50 max-h-32"
+            style={{ minHeight: '44px' }}
           />
-          <button
-            onClick={handleSend}
-            disabled={brainLoading || !input.trim()}
-            className="w-9 h-9 bg-white text-black rounded-full flex items-center justify-center font-bold disabled:opacity-50 hover:bg-zinc-200 transition-colors flex-shrink-0"
-          >
-            ↑
-          </button>
+          <div className="absolute right-2 bottom-2 flex items-center gap-1">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="p-2 text-zinc-500 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors disabled:opacity-50"
+              title="Attach file"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+              </svg>
+            </button>
+            <button
+              onClick={handleSend}
+              disabled={brainLoading || !input.trim()}
+              className="p-2 bg-white text-black rounded-lg disabled:opacity-30 hover:bg-zinc-200 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>
