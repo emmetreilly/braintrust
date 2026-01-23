@@ -42,9 +42,9 @@ export default function InsightCard({
       {/* Just the content */}
       <p className="text-sm whitespace-pre-line">{cleanContent}</p>
 
-      {/* Tiny indicator */}
-      <span className="text-[10px] text-zinc-600 mt-1 block">
-        via AI{authorName ? ` · ${authorName}` : ''}
+      {/* Minimal AI indicator */}
+      <span className="text-[10px] text-cyan-500 mt-1 block">
+        ✨ via Brain AI{authorName ? ` · ${authorName}` : ''}
       </span>
     </div>
   )

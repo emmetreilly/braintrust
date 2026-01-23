@@ -40,7 +40,10 @@
       "Bash(npx tsc:*)",
       "Bash(pkill:*)",
       "Bash(npm run dev:*)",
-      "Bash(lsof:*)"
+      "Bash(lsof:*)",
+      "Bash(DB=\"2b35d4d42e3c9f6b5ad5b5579a7b1470c66e69f6b33a31e3f5a0095cc6d18656.sqlite\":*)",
+      "Bash(sqlite3:*)",
+      "Bash(xargs kill:*)"
     ]
   }
 }

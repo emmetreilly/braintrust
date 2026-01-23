@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/auth'
 import Login from './pages/Login'
+import Home from './pages/Home'
 import Groups from './pages/Groups'
 import Chat from './pages/Chat'
 import Settings from './pages/Settings'
@@ -87,7 +88,14 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="/" element={<Navigate to="/groups" replace />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Home />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </BrowserRouter>
   )

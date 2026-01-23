@@ -515,6 +515,71 @@ export interface OrgProfile {
   linkedUserName?: string
 }
 
+// Integrations (Slack, Google Drive, Gmail, etc.)
+export const integrations = {
+  list: () =>
+    fetchApi<{ integrations: { id: string; provider: string; status: string; items_indexed: number; last_sync_at?: string }[] }>(
+      '/integrations'
+    ),
+
+  getStatus: (id: string) =>
+    fetchApi<{ integration: { id: string; provider: string; status: string; items_indexed: number; last_sync_at?: string } }>(
+      `/integrations/${id}/status`
+    ),
+
+  disconnect: (id: string) =>
+    fetchApi<{ success: boolean }>(`/integrations/${id}`, {
+      method: 'DELETE',
+    }),
+
+  sync: (id: string) =>
+    fetchApi<{ success: boolean; message: string }>(`/integrations/${id}/sync`, {
+      method: 'POST',
+    }),
+
+  // OAuth connect flows
+  connectSlack: () =>
+    fetchApi<{ authUrl: string }>('/integrations/slack/connect'),
+
+  connectGoogle: (services: string[] = ['drive']) =>
+    fetchApi<{ authUrl: string }>(`/integrations/google/connect?services=${services.join(',')}`),
+
+  connectHubspot: () =>
+    fetchApi<{ success: boolean; message: string; integration?: { id: string; provider: string; status: string; items_indexed: number } }>('/integrations/hubspot/connect', {
+      method: 'POST',
+    }),
+}
+
+// Workspace Search (cross-source AI search)
+export const search = {
+  query: (query: string, filters?: { sources?: string[]; dateRange?: { from: string; to: string }; authors?: string[] }) =>
+    fetchApi<{
+      answer: string
+      context: {
+        people: Array<{ name: string; email: string; messageCount: number; filesShared: number }>
+        timeline: Array<{ date: string; event: string; source: string }>
+      }
+      sources: Array<{
+        id: string
+        title: string
+        snippet: string
+        source: string
+        url: string
+        author?: string
+        date: string
+      }>
+    }>('/search', {
+      method: 'POST',
+      body: JSON.stringify({ query, filters }),
+    }),
+
+  suggestions: () =>
+    fetchApi<{ suggestions: string[] }>('/search/suggestions'),
+
+  recent: () =>
+    fetchApi<{ queries: { query: string; created_at: string }[] }>('/search/recent'),
+}
+
 // Combined API object for convenience
 export const api = {
   auth,
@@ -525,4 +590,6 @@ export const api = {
   documents,
   files,
   settings,
+  integrations,
+  search,
 }

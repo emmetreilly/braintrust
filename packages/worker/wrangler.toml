@@ -35,9 +35,10 @@ binding = "AI"
 
 # For production, set these via 'wrangler secret put'
 # - JWT_SECRET
-# - BRAVE_API_KEY (for fact-checking)
-# - TOGETHER_API_KEY (for LoRA training)
-# - NEWS_API_KEY (for recommendations)
 # - GOOGLE_CLIENT_ID (for Google OAuth)
 # - GOOGLE_CLIENT_SECRET (for Google OAuth)
-# Note: AI API keys are stored per-user in the database, not as secrets
+# - SLACK_CLIENT_ID (for Slack integration)
+# - SLACK_CLIENT_SECRET (for Slack integration)
+# - SLACK_SIGNING_SECRET (for Slack webhooks)
+# - ENCRYPTION_KEY (for encrypting OAuth tokens - generate with: openssl rand -hex 32)
+# Note: Embeddings use Cloudflare AI (no external API key needed)

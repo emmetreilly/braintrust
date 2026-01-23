@@ -6,6 +6,8 @@ import messages from './routes/messages'
 import brain from './routes/brain'
 import settings from './routes/settings'
 import documents from './routes/documents'
+import integrations from './routes/integrations'
+import search from './routes/search'
 import { ChatRoom } from './durable-objects/ChatRoom'
 import type { Env } from './types'
 
@@ -36,6 +38,8 @@ app.route('/api', messages) // messages routes use /groups/:id/messages path
 app.route('/api/brain', brain)
 app.route('/api/settings', settings)
 app.route('/api/documents', documents)
+app.route('/api/integrations', integrations)
+app.route('/api/search', search)
 
 // WebSocket endpoint for chat rooms
 app.get('/api/ws/:groupId', async (c) => {

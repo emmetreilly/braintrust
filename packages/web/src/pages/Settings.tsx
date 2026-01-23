@@ -1,12 +1,25 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../stores/auth'
-import { settings as settingsApi, groups as groupsApi, files as filesApi, OrgProfile } from '../lib/api'
+import { settings as settingsApi, groups as groupsApi, files as filesApi, integrations as integrationsApi, OrgProfile } from '../lib/api'
 import type { GroupMember, Group, DocumentTag } from '../types'
+
+interface Integration {
+  id: string
+  provider: 'slack' | 'google_drive' | 'gmail' | 'hubspot'
+  status: 'active' | 'syncing' | 'error' | 'disconnected'
+  items_indexed: number
+  last_sync_at?: string
+}
 
 export default function Settings() {
   const { groupId } = useParams<{ groupId?: string }>()
+  const [searchParams] = useSearchParams()
   const isChannelSettings = !!groupId
+
+  // Integrations state
+  const [integrationsList, setIntegrationsList] = useState<Integration[]>([])
+  const [syncingIntegration, setSyncingIntegration] = useState<string | null>(null)
 
   // Workspace settings state
   const [hasApiKey, setHasApiKey] = useState(false)
@@ -58,7 +71,22 @@ export default function Settings() {
 
   useEffect(() => {
     loadData()
-  }, [groupId])
+
+    // Handle OAuth callback messages
+    const successMsg = searchParams.get('success')
+    const errorMsg = searchParams.get('error')
+    if (successMsg) {
+      setSuccess(successMsg.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) + '!')
+      setTimeout(() => setSuccess(''), 5000)
+      // Clear URL params
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+    if (errorMsg) {
+      setError(errorMsg.replace(/_/g, ' '))
+      setTimeout(() => setError(''), 5000)
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [groupId, searchParams])
 
   const loadData = async () => {
     try {
@@ -79,15 +107,17 @@ export default function Settings() {
         setChannelDocs(docsRes.documents)
       } else {
         // Load workspace data
-        const [workspaceRes, docsRes, orgRes] = await Promise.all([
+        const [workspaceRes, docsRes, orgRes, integrationsRes] = await Promise.all([
           settingsApi.getWorkspaceApiKey(),
           settingsApi.getWorkspaceReferenceDocs(),
           settingsApi.getOrgProfiles().catch(() => ({ profiles: [] })),
+          integrationsApi.list().catch(() => ({ integrations: [] })),
         ])
         setHasApiKey(workspaceRes.hasApiKey)
         setWorkspaceName(workspaceRes.workspace.name)
         setWorkspaceDocs(docsRes.documents)
         setOrgProfiles(orgRes.profiles)
+        setIntegrationsList(integrationsRes.integrations || [])
       }
     } catch (err) {
       console.error('Failed to load settings:', err)
@@ -389,6 +419,91 @@ export default function Settings() {
     '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1',
     '#8b5cf6', '#a855f7', '#d946ef', '#ec4899',
   ]
+
+  // Integration functions
+  const handleConnectIntegration = async (provider: 'slack' | 'google_drive' | 'gmail' | 'hubspot') => {
+    try {
+      if (provider === 'hubspot') {
+        // HubSpot uses a private access token, not OAuth
+        const res = await integrationsApi.connectHubspot()
+        if (res.success && res.integration) {
+          setIntegrationsList(prev => [...prev, res.integration!])
+          setSuccess('HubSpot connected! Starting initial sync...')
+          setTimeout(() => setSuccess(''), 5000)
+          // Auto-trigger sync
+          if (res.integration.id) {
+            handleSyncIntegration(res.integration.id)
+          }
+        } else {
+          setError(res.message || 'Failed to connect HubSpot')
+        }
+        return
+      }
+
+      let res
+      if (provider === 'slack') {
+        res = await integrationsApi.connectSlack()
+      } else {
+        const services = provider === 'google_drive' ? ['drive'] : ['gmail']
+        res = await integrationsApi.connectGoogle(services)
+      }
+      if (res.authUrl) {
+        window.location.href = res.authUrl
+      }
+    } catch (err) {
+      setError('Failed to start connection. Please try again.')
+    }
+  }
+
+  const handleSyncIntegration = async (id: string) => {
+    setSyncingIntegration(id)
+    try {
+      await integrationsApi.sync(id)
+      // Reload integrations to get updated counts
+      const res = await integrationsApi.list()
+      setIntegrationsList(res.integrations || [])
+      setSuccess('Sync complete!')
+      setTimeout(() => setSuccess(''), 3000)
+    } catch (err) {
+      setError('Sync failed. Please try again.')
+    } finally {
+      setSyncingIntegration(null)
+    }
+  }
+
+  const handleDisconnectIntegration = async (id: string, provider: string) => {
+    if (!confirm(`Disconnect ${provider}? All indexed data from this source will be removed.`)) return
+    try {
+      await integrationsApi.disconnect(id)
+      setIntegrationsList(prev => prev.filter(i => i.id !== id))
+      setSuccess('Integration disconnected')
+      setTimeout(() => setSuccess(''), 3000)
+    } catch (err) {
+      setError('Failed to disconnect')
+    }
+  }
+
+  const getIntegration = (provider: string) => integrationsList.find(i => i.provider === provider)
+
+  const getProviderName = (provider: string) => {
+    switch (provider) {
+      case 'slack': return 'Slack'
+      case 'google_drive': return 'Google Drive'
+      case 'gmail': return 'Gmail'
+      case 'hubspot': return 'HubSpot'
+      default: return provider
+    }
+  }
+
+  const getProviderIcon = (provider: string) => {
+    switch (provider) {
+      case 'slack': return '💬'
+      case 'google_drive': return '📁'
+      case 'gmail': return '📧'
+      case 'hubspot': return '🔶'
+      default: return '📱'
+    }
+  }
 
   // Channel Settings View
   if (isChannelSettings) {
@@ -814,6 +929,223 @@ export default function Settings() {
                 {workspace?.domain || user?.email?.split('@')[1]}
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Connected Integrations */}
+        <h2 className="text-sm text-zinc-500 mb-3 flex items-center gap-2">
+          <span>Connected Sources</span>
+          {integrationsList.length > 0 && (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-500">
+              {integrationsList.reduce((sum, i) => sum + i.items_indexed, 0).toLocaleString()} items
+            </span>
+          )}
+        </h2>
+        <p className="text-xs text-zinc-600 mb-4">
+          Connect your tools to search across all your workspace data.
+        </p>
+
+        <div className="bg-zinc-900 rounded-xl p-4 mb-6">
+          <div className="space-y-3">
+            {/* Slack */}
+            {(() => {
+              const slack = getIntegration('slack')
+              return (
+                <div className="flex items-center justify-between p-3 bg-zinc-800 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">💬</span>
+                    <div>
+                      <div className="font-medium text-sm">Slack</div>
+                      {slack ? (
+                        <div className="text-xs text-zinc-500">
+                          {slack.items_indexed.toLocaleString()} items
+                          {slack.last_sync_at && ` · Last sync ${new Date(slack.last_sync_at).toLocaleTimeString()}`}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-zinc-500">Not connected</div>
+                      )}
+                    </div>
+                  </div>
+                  {slack ? (
+                    <div className="flex items-center gap-2">
+                      {slack.status === 'syncing' || syncingIntegration === slack.id ? (
+                        <span className="text-xs text-yellow-500 animate-pulse">Syncing...</span>
+                      ) : (
+                        <button
+                          onClick={() => handleSyncIntegration(slack.id)}
+                          className="text-xs text-cyan-400 hover:text-cyan-300"
+                        >
+                          Sync
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDisconnectIntegration(slack.id, 'Slack')}
+                        className="text-xs text-red-400 hover:text-red-300"
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleConnectIntegration('slack')}
+                      className="px-3 py-1.5 bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 rounded-lg text-xs font-medium"
+                    >
+                      Connect
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* Google Drive */}
+            {(() => {
+              const drive = getIntegration('google_drive')
+              return (
+                <div className="flex items-center justify-between p-3 bg-zinc-800 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">📁</span>
+                    <div>
+                      <div className="font-medium text-sm">Google Drive</div>
+                      {drive ? (
+                        <div className="text-xs text-zinc-500">
+                          {drive.items_indexed.toLocaleString()} files
+                          {drive.last_sync_at && ` · Last sync ${new Date(drive.last_sync_at).toLocaleTimeString()}`}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-zinc-500">Not connected</div>
+                      )}
+                    </div>
+                  </div>
+                  {drive ? (
+                    <div className="flex items-center gap-2">
+                      {drive.status === 'syncing' || syncingIntegration === drive.id ? (
+                        <span className="text-xs text-yellow-500 animate-pulse">Syncing...</span>
+                      ) : (
+                        <button
+                          onClick={() => handleSyncIntegration(drive.id)}
+                          className="text-xs text-cyan-400 hover:text-cyan-300"
+                        >
+                          Sync
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDisconnectIntegration(drive.id, 'Google Drive')}
+                        className="text-xs text-red-400 hover:text-red-300"
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleConnectIntegration('google_drive')}
+                      className="px-3 py-1.5 bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 rounded-lg text-xs font-medium"
+                    >
+                      Connect
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* Gmail */}
+            {(() => {
+              const gmail = getIntegration('gmail')
+              return (
+                <div className="flex items-center justify-between p-3 bg-zinc-800 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">📧</span>
+                    <div>
+                      <div className="font-medium text-sm">Gmail</div>
+                      {gmail ? (
+                        <div className="text-xs text-zinc-500">
+                          {gmail.items_indexed.toLocaleString()} emails
+                          {gmail.last_sync_at && ` · Last sync ${new Date(gmail.last_sync_at).toLocaleTimeString()}`}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-zinc-500">Not connected</div>
+                      )}
+                    </div>
+                  </div>
+                  {gmail ? (
+                    <div className="flex items-center gap-2">
+                      {gmail.status === 'syncing' || syncingIntegration === gmail.id ? (
+                        <span className="text-xs text-yellow-500 animate-pulse">Syncing...</span>
+                      ) : (
+                        <button
+                          onClick={() => handleSyncIntegration(gmail.id)}
+                          className="text-xs text-cyan-400 hover:text-cyan-300"
+                        >
+                          Sync
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDisconnectIntegration(gmail.id, 'Gmail')}
+                        className="text-xs text-red-400 hover:text-red-300"
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleConnectIntegration('gmail')}
+                      className="px-3 py-1.5 bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 rounded-lg text-xs font-medium"
+                    >
+                      Connect
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* HubSpot */}
+            {(() => {
+              const hubspot = getIntegration('hubspot')
+              return (
+                <div className="flex items-center justify-between p-3 bg-zinc-800 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">🔶</span>
+                    <div>
+                      <div className="font-medium text-sm">HubSpot</div>
+                      {hubspot ? (
+                        <div className="text-xs text-zinc-500">
+                          {hubspot.items_indexed.toLocaleString()} items
+                          {hubspot.last_sync_at && ` · Last sync ${new Date(hubspot.last_sync_at).toLocaleTimeString()}`}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-zinc-500">Contacts, deals, companies</div>
+                      )}
+                    </div>
+                  </div>
+                  {hubspot ? (
+                    <div className="flex items-center gap-2">
+                      {hubspot.status === 'syncing' || syncingIntegration === hubspot.id ? (
+                        <span className="text-xs text-yellow-500 animate-pulse">Syncing...</span>
+                      ) : (
+                        <button
+                          onClick={() => handleSyncIntegration(hubspot.id)}
+                          className="text-xs text-cyan-400 hover:text-cyan-300"
+                        >
+                          Sync
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDisconnectIntegration(hubspot.id, 'HubSpot')}
+                        className="text-xs text-red-400 hover:text-red-300"
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleConnectIntegration('hubspot')}
+                      className="px-3 py-1.5 bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 rounded-lg text-xs font-medium"
+                    >
+                      Connect
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
           </div>
         </div>
 

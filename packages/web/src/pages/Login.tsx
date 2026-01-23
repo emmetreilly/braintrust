@@ -30,7 +30,7 @@ export default function Login() {
     if (token) {
       // Got token from OAuth - store it and navigate
       setToken(token)
-      navigate('/groups', { replace: true })
+      navigate('/', { replace: true })
     } else if (oauthError) {
       // OAuth failed
       const errorMessages: Record<string, string> = {
@@ -98,8 +98,8 @@ export default function Login() {
       } else {
         await signup(email, password, name)
       }
-      // Navigate to workspace/groups after successful auth
-      navigate('/groups')
+      // Navigate to home after successful auth
+      navigate('/')
     } catch (err) {
       console.error('Auth error:', err)
       if (!error) {

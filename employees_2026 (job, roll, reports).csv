@@ -1,0 +1,374 @@
+Name,Email,Title,Department,Reports To,Level,WhyGO Alignment,Job Description,Core Responsibilities,Suggested KPIs (WhyGO-Aligned)
+Daniel Kalotov,daniel@kartel.ai,"SVP, Head of Community & Partnerships",community,luke@kartel.ai,department_head,"Company WhyGO #3 (Primary), #1 (Secondary)",Leads the talent acquisition engine that enables Kartel to scale without linear headcount growth. Builds the Discord community with 5-tier pipeline that certifies and delivers qualified generative artists ready for pod deployment.,"• Own Community WhyGO #1: Talent Engine (1,000 members, 20 Tier 5 talent)
+• Own Community WhyGO #2: Community System Performance
+• Build gamified 5-tier talent pipeline
+• Finalize Lighthouse certification partnership (Q1)
+• Run sponsored community events (Prompetitions, brand challenges)
+• Coordinate with Fill on Community Ecosystem Platform","Community WhyGO #1: Talent Engine
+• Discord community members: 300 Q1 _ 1,000 Q4
+• Qualified talent ready for deployment (Tier 5): 5 Q1 _ 20 Q4
+• Lighthouse certification live: 4 role tracks
+• Sponsored community events: 1 Q1 _ 4+ Q4
+
+Community WhyGO #2: System Performance
+• Active member rate (weekly engagement): Baseline Q1 _ TBD
+• Tier progression velocity (Tier 1_4): Baseline Q1 _ TBD
+• Generation credits utilized: Baseline Q1 _ TBD
+
+Dependencies
+• Community Ecosystem Platform MVP: Live by Q1 (with Fill)
+• Lighthouse partnership: Finalized Q1"
+Fill Isgro,fill@kartel.ai,"SVP, Head of Generative Engineering",generative,luke@kartel.ai,department_head,"Company WhyGO #2, #3, #4","Leads Kartel's generative production systems, engineering workflows, and team development. Drives technical excellence, reproducibility, and scalable systems that support client work and platform evolution. Primary owner of Company WhyGO #3 Tier 5 deployment outcome.","• Own Generative WhyGO #1: Role Definition & Scale Readiness
+• Own Generative WhyGO #2: Technical Excellence & R&D
+• Own Generative WhyGO #3: Generative Platform Expansion
+• Deploy 20 Tier 5 talent on client work by EOY
+• Build Community Ecosystem Platform MVP (Q1)
+• Document all role playbooks for Pod 2 onboarding","Generative WhyGO #1: Role Definition & Scale Readiness
+• Role Playbooks completed: 2 Q1 _ 5 Q4
+• Playbooks approved as onboarding-ready: 1 Q1 _ 5 Q4
+• Pod capacity load-tested: Q1
+• Max concurrent clients per pod: Documented by EOY
+
+Generative WhyGO #2: Technical Excellence
+• QC process documented: Q1
+• R&D reports: 3 Q1 _ 12 Q4
+• LoRA Eval tool: MVP Q1 _ Optimized Q3
+• Bulk run success rate: Baseline Q1
+
+Generative WhyGO #3: Platform Expansion
+• Internal Enterprise Platform use cases: 1 Q1 _ 4 Q4
+• Community Ecosystem Platform: MVP Q1 _ Validated Q4
+• Kartel Labs tools: 2 Q1 _ 6 Q4
+• Monthly Demo Days: 12/year"
+Ahmed Yakout,ahmedt@kartel.ai,Workflow Engineer - Real Estate,generative,fill@kartel.ai,Employee,"Generative WhyGO #1, #2",Workflow engineer focused on building production-ready AI workflow systems for the real estate industry vertical. Creates brand-specific intelligence systems for real estate visual content at scale.,"• Design and build ComfyUI workflows for real estate vertical
+• Create modular systems for real estate visualization
+• Debug workflow issues under production deadlines
+• Collaborate with LoRA specialists on real estate models
+• Support daily production for real estate clients
+• Document real estate workflow optimizations","Generative WhyGO #1: Role Definition
+• Role Playbook: Completed and approved
+• Kartel Labs tool: Built for role optimization
+
+Generative WhyGO #2: Technical Excellence
+• Project delivery: 100% on-time
+• Creative approval: First-round approval rate ≥75%
+• Output quality: Deliverables requiring no rework
+• Workflow documentation: 100% documented
+
+Company WhyGO #1: PMF Across Verticals
+• Real estate vertical support: Workflows operational"
+Brandon Valedez,brandon@kartel.ai,Data Training / LoRA Models,generative,fill@kartel.ai,Employee,"Generative WhyGO #1, #2",Owns the most critical phase of model development—transforming raw client assets into training-ready datasets. Decisions about data inclusion/exclusion determine whether models capture brand DNA or generic approximations.,"• Evaluate client assets to identify training-worthy samples
+• Make critical decisions on data inclusion/exclusion
+• Execute on-location and studio shoots for training data
+• Parse massive data dumps (100GB+) into organized sets
+• Create precise captions preserving brand attributes
+• Prepare data for various training frameworks","Generative WhyGO #1: Role Definition
+• Role Playbook: Completed and approved
+• Kartel Labs tool: Built for role optimization
+
+Generative WhyGO #2: Technical Excellence
+• Dataset quality: LoRA models capture brand DNA
+• Processing speed: 100GB+ parsed within SLA
+• Data cleanliness: Zero training poisoning
+• Capture quality: 100% usable assets from sessions
+• Documentation: Full traceability from raw asset to training set"
+Elliot Quartz,elliot@kartel.ai,AI Generalist,generative,fill@kartel.ai,Employee,"Generative WhyGO #1, #2, #3","Supports Kartel's Generative Engineering team by producing high-quality, brand-aligned visual content for enterprise clients. Blends creative judgment, technical proficiency, and ability to execute high-volume production workflows with consistency.","• Execute AI-driven image and video generation using ComfyUI workflows
+• Implement custom LoRA models into production workflows
+• Generate large-volume batches of brand-compliant assets
+• Evaluate AI outputs and curate selections meeting quality standards
+• Troubleshoot technical issues in workflow execution
+• Prepare organized asset packages for delivery","Generative WhyGO #1: Role Definition
+• Role Playbook: Completed and approved
+• Kartel Labs tool: Built for role optimization
+
+Generative WhyGO #2: Technical Excellence
+• Asset quality: Meets brand compliance standards
+• Volume output: Achieves batch targets per project
+• Workflow reliability: Minimizes troubleshooting cycles
+• Delivery timeliness: On-schedule asset packages
+• Communication: Proactive blocker flagging
+
+R&D Contribution
+• R&D reports completed: Per team cadence"
+Marc Donhue,marc@kartel.ai,Preditor,generative,fill@kartel.ai,Employee,"Generative WhyGO #1, #2, #3","Represents the complete creative pipeline in one person—conceiving, generating, and finishing content for enterprise clients. Operates AI tools with editorial fluency, ensuring creative vision remains intact from client brief to broadcast delivery.","• Operate ComfyUI workflows to generate high-quality assets
+• Edit generated content into broadcast-ready sequences
+• Structure narratives from non-linear AI outputs
+• Color grade to match brand standards and emotional tone
+• Design and mix professional sound
+• Create motion graphics and visual effects","Generative WhyGO #1: Role Definition
+• Role Playbook: Completed and approved
+• Kartel Labs tool: Built for role optimization
+
+Generative WhyGO #2: Technical Excellence
+• Project delivery: 100% on-time against contracted timelines
+• Creative approval: First-round approval rate ≥75%
+• Output quality: Broadcast-ready deliverables, no rework
+• Client satisfaction: Feedback rating ≥4.5/5
+• Workflow documentation: 100% of workflows documented"
+Sean Geisterfer,sean@kartel.ai,Data Engineering,generative,fill@kartel.ai,Employee,"Generative WhyGO #1, #2","Producer, director of photography, and creative technologist specializing in LED-wall virtual production, volumetric capture, and immersive storytelling. Creates LoRA-ready datasets connecting real-world talent and environments to Kartel's generative systems.","• Lead LED-wall virtual production shoots
+• Execute volumetric capture sessions for client projects
+• Produce training-ready datasets from real-world capture
+• Connect physical capture to AI-driven workflows
+• Blend traditional cinematography with generative AI
+• Deliver LED-panel solutions for hybrid production","Generative WhyGO #1: Role Definition
+• Role Playbook: Completed and approved
+• Kartel Labs tool: Built for role optimization
+
+Generative WhyGO #2: Technical Excellence
+• Capture quality: 100% usable for LoRA training
+• Dataset completeness: Full coverage of required angles
+• Production delivery: On-time, on-budget capture sessions
+• Model integration: Successful LoRA training from capture data"
+Trent Hunter,trent@kartel.ai,Workflow Engineer,generative,fill@kartel.ai,Employee,"Generative WhyGO #1, #2, #3",Designs and builds production-ready AI workflow systems solving real enterprise problems. Engineers brand-specific intelligence systems that transform visual content production at enterprise scale.,"• Design and build complex ComfyUI workflows (100+ nodes)
+• Create modular, scalable workflow systems
+• Debug complex workflow issues under production deadlines
+• Identify bottlenecks and engineer 10-100x improvements
+• Support daily production across multiple client projects
+• Document workflow optimizations and create templates","Generative WhyGO #1: Role Definition
+• Role Playbook: Completed and approved
+• Kartel Labs tool: Built for role optimization
+
+Generative WhyGO #2: Technical Excellence
+• System reproducibility: 80%+ first-run success rate
+• Workflow complexity: 100+ node production reliability
+• Throughput improvement: 10-100x vs baseline
+• Output volume: 1000+ consistent outputs per workflow
+• Documentation: 100% workflows documented with templates
+
+R&D Contribution
+• R&D reports completed: Per team cadence"
+Jerry Bellman,ap@kartel.ai,CFO (Part-Time),management,kevin@kartel.ai,executive,Company WhyGO #2 (Financial Support),"Oversees financial planning, reporting, and compliance. Ensures financial data supports WhyGO tracking and board reporting. Manages cash position and burn rate.","• Financial planning and forecasting
+• Monthly and quarterly financial reporting
+• Production margin calculation and tracking
+• Cash position and burn rate management
+• Board financial reporting
+• Compensation and bonus calculations","Company WhyGO #2: Operational Excellence
+• Production margin tracking: Monthly accuracy
+• Financial reporting: On-time and accurate
+
+Financial Operations
+• Cash position tracking: Weekly updates
+• Burn rate management: Within budget
+• Board reports: On-time delivery
+• Audit readiness: Clean financial records"
+Kevin Reilly,kevin@kartel.ai,CEO,management,,executive,Company WhyGOs #1-4 (Owner),"Sets company vision, owns Company WhyGOs, leads fundraising, maintains investor and board relationships. Accountable for overall company performance against annual targets.","• Own Company WhyGO achievement across all four priorities
+• Lead Series A fundraising and investor relations
+• Drive strategic partnerships and market positioning
+• Chair weekly leadership sync and quarterly board reviews
+• Ensure cross-departmental alignment on WhyGO execution
+• Make final decisions on pricing, deal structures, and market positioning","Company WhyGO #1: PMF Across Verticals
+• 5 verticals with 2+ clients by Q2
+• $7M revenue closed by EOY
+
+Company WhyGO #2: Operational Excellence
+• 50% production margin by Q4
+• 50+ Client NPS by Q4
+
+Company WhyGO #3: Talent Engine
+• 20 Tier 5 talent deployed by EOY
+
+Company WhyGO #4: Enterprise Platform
+• 3-pillar platform live by Q4"
+Luke Peterson,luke@kartel.ai,President & Co-Founder,management,kevin@kartel.ai,executive,Company WhyGO #2 (Primary Owner),Owns operational excellence and department head accountability. Ensures Company WhyGOs cascade properly to Department and Individual WhyGOs. Drives the systems and processes that scale Kartel.,"• Own Company WhyGO #2 (Operational Excellence) execution
+• Manage department heads: Wayan, Fill, Daniel, Niels
+• Drive WhyGO cascade from Company _ Department _ Individual
+• Lead weekly leadership sync on WhyGO pacing
+• Resolve cross-departmental blockers and resource conflicts
+• Own production margin target achievement (50% by Q4)","Company WhyGO #2: Operational Excellence
+• 50% production margin by Q4
+• 90%+ on-time delivery by Q4
+• Department WhyGO completion rate: 100%
+
+Leadership & Alignment
+• Weekly pacing reviews completed: 100%
+• Individual WhyGO cascade completion: 100% by Jan 29
+• Cross-departmental dependency tracking: Active"
+Niels Hoffmann,niels@kartel.ai,CTO,platform,luke@kartel.ai,department_head,"Company WhyGO #4 (Primary), #2, #3 (Secondary)","Heads Platform Engineering responsible for Enterprise Platform, KartelOS, cloud architecture, and AI workflow orchestration. Builds the integration layer connecting Client Portal, Production Management, and Generative Platform into a unified ecosystem.","• Own Platform WhyGO #1: Deploy Enterprise Platform
+• Own Platform WhyGO #2: Enterprise Security & Compliance
+• Own Platform WhyGO #3: Unified Identity & Access Management
+• Build Production Management and Client Portal
+• Integrate Fill's Generative Platform into ecosystem
+• Enable Talent Engine user journey via unified identity","Platform WhyGO #1: Deploy Enterprise Platform
+• Production Management: MVP Q1 _ Iterate Q4
+• Client Portal: MVP Q1 _ Iterate Q4
+• Generative Platform integration: Spec Q1 _ Iterate Q4
+
+Platform WhyGO #2: Security & Compliance
+• Security controls: Baseline Q1 _ Audit-ready Q4
+• Client data isolation: Assessed Q1 _ Documented Q4
+• Compliance certification: TBD (based on client needs)
+
+Platform WhyGO #3: Unified Identity
+• Centralized user management: Spec Q1 _ Live Q4
+• Identity providers: 1 Q1 _ 2 Q4
+• Platforms with SSO: 1 Q2 _ 4 Q4
+• Discord_Generative connection: MVP Q1 _ Optimized Q4
+• Full user journey functional: Spec Q1 _ Optimized Q4"
+Lukas Motiejunas,lukas@kartel.ai,Full Stack Developer,platform,niels@kartel.ai,Employee,Platform WhyGO #1,"Full-stack developer focused on platform UI/UX implementation, Production Management development, API integration, and cross-system functionality.","• Full stack feature development
+• Platform UI/UX implementation
+• Production Management development
+• API integration
+• Cross-system functionality
+• Generative Platform integration support","Platform WhyGO #1: Deploy Enterprise Platform
+• Production Management development: On-time delivery
+• Generative Platform integration: Per spec
+
+Engineering Standards
+• Sprint velocity: Consistent (±10% variance)
+• Code quality: <5% defect rate
+• PR cycle time: Review to merge <24 hours
+• Test coverage: >80% on new code
+• Feature delivery: On-time vs sprint commitments
+• Bug resolution: P1 <24 hours, P2 <72 hours"
+Matthias Thoemmes,matthias@kartel.ai,Full Stack Developer,platform,niels@kartel.ai,Employee,"Platform WhyGO #1, #3","Full-stack developer and systems architect focused on cloud platform architecture, real-time media pipelines, AI workflow integration, vector search infrastructure, and backend API connectivity.","• Cloud platform architecture development
+• Real-time media pipeline implementation
+• AI workflow integration
+• Vector search infrastructure
+• Backend API connectivity
+• Client Portal frontend development","Platform WhyGO #1: Deploy Enterprise Platform
+• Client Portal development: On-time delivery
+• API connectivity: Functional integrations
+
+Platform WhyGO #3: Unified Identity
+• Identity frontend implementation: Per sprint plan
+
+Engineering Standards
+• Sprint velocity: Consistent (±10% variance)
+• Code quality: <5% defect rate
+• PR cycle time: Review to merge <24 hours
+• Test coverage: >80% on new code
+• Feature delivery: On-time vs sprint commitments
+• Bug resolution: P1 <24 hours, P2 <72 hours"
+Zac Bagley,zac@kartel.ai,Backend Engineer,platform,niels@kartel.ai,Employee,"Platform WhyGO #2, #3","Backend engineer providing API development, database operations, DevOps support, and AI pipeline integration. Supports security controls and identity backend.","• Backend API development and maintenance
+• Database schema, migrations, optimization
+• CI/CD pipelines and deployment
+• AI/media pipeline backend connections
+• Cloud infrastructure support
+• Security controls implementation","Platform WhyGO #2: Security & Compliance
+• Security controls implementation: Per timeline
+
+Platform WhyGO #3: Unified Identity
+• Identity backend development: Per spec
+
+Engineering Standards
+• API reliability: 99.9% endpoint availability
+• Code quality: <5% defect rate
+• PR cycle time: Review to merge <24 hours
+• Incident response: P1 resolution <2 hours
+• Sprint completion: 90%+ story points
+• Test coverage: >80% on new backend code"
+Wayan Palmieri,wayan@kartel.ai,"SVP, Head of Production",production,luke@kartel.ai,department_head,"Company WhyGO #2 (Primary), #1 (Secondary)","Leads Kartel's production operations, overseeing client delivery, handoff discipline, and team performance. Responsible for ensuring projects are delivered profitably, on time, and at quality standards while scaling from 6 to 20 clients.","• Own Production WhyGO #1: Scale through disciplined handoffs
+• Enforce platform-tracked handoff compliance across all four handoffs
+• Own Production WhyGO #2: Deliver premier client experience
+• Achieve 50% production margin and 90%+ on-time delivery
+• Scale Production capacity with revenue (target 4:1 ratio)
+• Manage and develop production team","Production WhyGO #1: Disciplined Handoffs
+• Active client engagements: 6-8 Q1 _ 20 Q4
+• Handoff #1 Compliance (Sales_Prod): 80% Q1 _ 100% Q4
+• Handoff #2-4 Compliance: 80% Q1 _ 100% Q4
+• Closing Reports delivered: 80% Q1 _ 100% Q4
+• Case study packages: 2 Q1 _ 8+ Q4
+• Avg onboarding time: 21 days _ 14 days
+
+Production WhyGO #2: Premier Client Experience
+• Production Margin: 40% Q1 _ 50% Q4
+• On-Time Delivery vs SLA: 80% Q1 _ 90%+ Q4
+
+Production WhyGO #3: Scale Capacity
+• Producers on team: 3 Q1 _ 5-6 Q4
+• Client-to-Producer ratio: Target 4:1"
+Jason Goldwatch,goldwatch@kartel.ai,Director,production,wayan@kartel.ai,manager,"Production WhyGO #1, #2","Manages day-to-day production operations as primary checkpoint for quality, timelines, and client communications. Provides final review of deliverables against SOW requirements and ensures consistency across all production output.","• Direct management of production team (including Noah Shields)
+• Approve artist assignments before coordination handoff
+• Final review of deliverables against SOW requirements
+• Review and approve all client-facing emails from producers
+• Flag scope creep and quality issues proactively
+• Coordinate with Wayan on escalations and resource allocation","Production WhyGO #1: Disciplined Handoffs
+• Artist assignment accuracy and utilization
+• Production@kartel.ai visibility maintained
+
+Production WhyGO #2: Premier Client Experience
+• On-time delivery: ≥90%
+• Production margin targets met per project
+• Zero unapproved client communications from team
+
+Team Development
+• Quarterly 1:1s completed
+• Performance plans documented for direct reports"
+Veronica Diaz,veronica@kartel.ai,Production Manager,production,wayan@kartel.ai,Employee,"Production WhyGO #1, #2","Manages day-to-day production operations as the primary checkpoint for quality, timelines, and client communications. Approves artist assignments and ensures delivery standards are met across all active projects.","• Direct management of production team (including Noah)
+• Approve artist assignments before coordination handoff
+• Ensure delivery timelines and quality standards are met
+• Review and approve all client-facing emails from producers
+• Enforce process discipline and production@kartel.ai visibility
+• Conduct quarterly 1:1s and performance documentation","Production WhyGO #1: Disciplined Handoffs
+• Artist assignment accuracy and utilization
+• Projects following established workflows: 100%
+• Handoff documentation completeness
+
+Production WhyGO #2: Premier Client Experience
+• On-time delivery: ≥90%
+• Production margin targets met per project
+• Zero unapproved client communications from team
+
+Team Development
+• Quarterly 1:1s completed: 100%
+• Performance plans documented for direct reports"
+Estefania Guarderas,estefania@kartel.ai,Producer,production,wayan@kartel.ai,Employee,Production WhyGO #2,"Serves as a producer on client engagements with additional creative and technical capabilities. Manages client relationships, budget negotiations, crew hiring, and project delivery from brief through final delivery.","• Client-facing communication and relationship management
+• Budget negotiation and project scoping
+• Crew/talent hiring and coordination
+• Project delivery from brief through final delivery
+• SOW compliance and revision management
+• Bring in new client opportunities","Production WhyGO #2: Premier Client Experience
+• On-time delivery: ≥90%
+• Client satisfaction: Positive feedback on managed projects
+• Budget management: Projects within approved budget
+• SOW compliance: 100% complete SOW before production
+
+Handoff Compliance
+• Closing Reports submitted on time
+• Platform-tracked handoffs executed properly"
+Noah Shields,noah@kartel.ai,Associate Producer,production,veronica@kartel.ai,Employee,"Production WhyGO #1, #2","Serves as the operational bridge between sales and production, coordinating project execution, managing client communications, and ensuring SOW compliance throughout the production lifecycle.","• Manage day-to-day project logistics and timelines
+• Primary liaison between sales and production teams
+• Track project milestones and flag potential delays
+• Handle routine client communications and status updates
+• Enforce SOW completion before any project starts
+• Maintain project documentation and version control","Production WhyGO #1: Disciplined Handoffs
+• SOW compliance: 100% complete before production begins
+• Documentation: All projects properly logged and tracked
+• Handoff #2 (Prod_Gen) executed on time
+
+Production WhyGO #2: Premier Client Experience
+• On-time delivery: ≥90%
+• Client communication: Timely responses and proactive updates
+• Follow-through: Zero items falling through the cracks"
+Ben Kusin,ben@kartel.ai,CRO & Co-Founder,sales,kevin@kartel.ai,department_head,"Company WhyGO #1 (Primary), #2 (Secondary)","Owns revenue generation and client success. Leads enterprise deal strategy, builds the sales team, and ensures client relationships drive retention and expansion. Primary owner of Company WhyGO #1.","• Own Company WhyGO #1 (PMF Across Verticals) outcomes
+• Close $7M in revenue across 5 verticals
+• Build sales team (SVP + AMs) to support 18+ clients
+• Collect NPS and own client satisfaction metrics
+• Publish 5 case studies by EOY
+• Maintain 100% handoff compliance with Production","Sales WhyGO #1: Land Enterprise Clients
+• Spec engagements signed: 4 Q1 _ 18+ Q4
+• Revenue closed: $1.5M Q1 _ $7M Q4
+• Paying clients: 14+ by EOY
+• Verticals with 2+ paying clients: 5
+
+Sales WhyGO #2: Client Success Engine
+• Client NPS: 50+ by Q4
+• Case studies published: 5 by EOY
+• Client retention post-spec: 90%+
+
+Sales WhyGO #3: Scalable Sales Ops
+• Team built: 4-5 by Q4
+• Handoff compliance: 100% by Q4
+• Pipeline forecast accuracy: ±15%"
+Emmet Reilly,emmet@kartel.ai,Director of Customer Success,sales,ben@kartel.ai,Employee,Sales WhyGO #3 (Scalable Sales Ops),"Serves as the operational backbone of the sales organization. Owns CRM hygiene, meeting coordination, and client intake validation. Ensures information flows effectively between Sales, Production, and clients.","• Validate client fit against qualification criteria
+• Own HubSpot CRM hygiene and data integrity
+• Coordinate client meetings and prepare pre-call briefs
+• Track deal stage advancement and pipeline reporting
+• Support Client Solutions Specialist with QBR scheduling
+• Produce weekly pipeline reports with forecast inputs","Sales WhyGO #3: Scalable Sales Ops
+• CRM data accuracy: >95%
+• Stage compliance: 100%
+• Meeting scheduling: <24 hours
+• Report timeliness: 100%
+• Process adherence: >90%
+• Pipeline report accuracy: ±5% of actual"
