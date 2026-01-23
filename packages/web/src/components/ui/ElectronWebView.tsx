@@ -57,11 +57,27 @@ export default function ElectronWebView({
     }
 
     const initBrowserView = async () => {
+      // Wait for next frame to ensure container has been laid out
+      await new Promise(resolve => requestAnimationFrame(resolve))
+
       const bounds = containerRef.current!.getBoundingClientRect()
+      console.log('BrowserView init bounds:', bounds)
+
+      // Don't initialize if bounds are invalid
+      if (bounds.width === 0 || bounds.height === 0) {
+        console.warn('Container has zero dimensions, retrying...')
+        // Retry after a short delay
+        setTimeout(() => initBrowserView(), 100)
+        return
+      }
+
       const result = await electron.browserView.open(tabId, url, boundsToObject(bounds))
+      console.log('BrowserView open result:', result)
 
       if (result.success) {
         setIsUsingBrowserView(true)
+      } else {
+        console.error('BrowserView failed to open:', result.error)
       }
       setIsLoading(false)
     }
@@ -76,9 +92,9 @@ export default function ElectronWebView({
     }
   }, [tabId]) // Only run on mount/unmount
 
-  // Update URL when it changes
+  // Update URL when it changes (only after BrowserView is initialized)
   useEffect(() => {
-    if (!electron || !isUsingBrowserView) return
+    if (!electron || !isUsingBrowserView || isLoading) return
 
     const updateUrl = async () => {
       const bounds = containerRef.current?.getBoundingClientRect()
@@ -91,11 +107,11 @@ export default function ElectronWebView({
       updateUrl()
       setCurrentUrl(url)
     }
-  }, [url, electron, isUsingBrowserView, tabId, currentUrl])
+  }, [url, electron, isUsingBrowserView, isLoading, tabId, currentUrl])
 
-  // Handle container resize
+  // Handle container resize (only after BrowserView is initialized)
   useEffect(() => {
-    if (!electron || !isUsingBrowserView || !containerRef.current) return
+    if (!electron || !isUsingBrowserView || isLoading || !containerRef.current) return
 
     const updateBounds = () => {
       const bounds = containerRef.current?.getBoundingClientRect()
@@ -115,7 +131,7 @@ export default function ElectronWebView({
       observer.disconnect()
       window.removeEventListener('resize', updateBounds)
     }
-  }, [electron, isUsingBrowserView, tabId])
+  }, [electron, isUsingBrowserView, isLoading, tabId])
 
   // Track if we're in an auth flow
   const [showAuthComplete, setShowAuthComplete] = useState(false)
@@ -178,20 +194,9 @@ export default function ElectronWebView({
   // Suppress unused variable warning - iframeError state kept for future use
   void iframeError
 
-  // Loading state
-  if (isLoading) {
-    return (
-      <div className="h-full flex items-center justify-center bg-zinc-900">
-        <div className="text-zinc-500 flex items-center gap-2">
-          <div className="w-4 h-4 border-2 border-zinc-600 border-t-cyan-500 rounded-full animate-spin" />
-          Loading...
-        </div>
-      </div>
-    )
-  }
-
-  // Electron: BrowserView renders natively, we just need a placeholder div
-  if (isUsingBrowserView) {
+  // Electron mode: Show nav bar + BrowserView container
+  // The container must exist for bounds calculation even while loading
+  if (electron) {
     return (
       <div className="h-full flex flex-col">
         {/* Navigation bar */}
@@ -285,7 +290,29 @@ export default function ElectronWebView({
         )}
 
         {/* BrowserView container - Electron renders the view here */}
-        <div ref={containerRef} className="flex-1" />
+        {/* This div must exist even while loading so we can get its bounds */}
+        <div ref={containerRef} className="flex-1 relative">
+          {isLoading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-zinc-900">
+              <div className="text-zinc-500 flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-zinc-600 border-t-cyan-500 rounded-full animate-spin" />
+                Loading...
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // Non-Electron loading state
+  if (isLoading) {
+    return (
+      <div className="h-full flex items-center justify-center bg-zinc-900">
+        <div className="text-zinc-500 flex items-center gap-2">
+          <div className="w-4 h-4 border-2 border-zinc-600 border-t-cyan-500 rounded-full animate-spin" />
+          Loading...
+        </div>
       </div>
     )
   }

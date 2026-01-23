@@ -1,0 +1,51 @@
+{
+  "name": "brain-trust-desktop",
+  "version": "1.0.0",
+  "description": "Brain Trust Desktop App",
+  "main": "main.js",
+  "author": "Kartel",
+  "license": "MIT",
+  "scripts": {
+    "dev": "ELECTRON_RUN_AS_NODE= electron .",
+    "build": "electron-builder",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "ai.kartel.braintrust",
+    "productName": "Brain Trust",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../web/dist",
+        "to": "app",
+        "filter": ["**/*"]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "icons/icon.icns",
+      "target": ["dmg", "zip"]
+    },
+    "win": {
+      "icon": "icons/icon.ico",
+      "target": ["nsis", "portable"]
+    },
+    "linux": {
+      "icon": "icons",
+      "target": ["AppImage", "deb"]
+    }
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  }
+}
